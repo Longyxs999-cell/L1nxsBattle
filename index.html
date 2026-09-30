@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>L1nxsupgrade — Case Battle</title>
+<style>
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at 20% 0%, #713cff25, transparent 35%),
+        radial-gradient(circle at 80% 20%, #00d9ff12, transparent 35%),
+        #070910;
+    color: white;
+    font-family: Arial, sans-serif;
+}
+header {
+    height: 65px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    background: #0b0e17ee;
+    border-bottom: 1px solid #ffffff12;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+.logo {
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: #a86bff;
+}
+.balance {
+    padding: 9px 13px;
+    border-radius: 10px;
+    background: #151a28;
+}
+main {
+    width: min(1000px, 100%);
+    margin: auto;
+    padding: 25px 15px 70px;
+}
+h1 {
+    font-size: 38px;
+    margin: 0 0 8px;
+}
+.subtitle {
+    color: #858da3;
+    margin-bottom: 25px;
+}
+.battle {
+    background: #0e121d;
+    border: 1px solid #ffffff10;
+    border-radius: 20px;
+    padding: 20px;
+}
+.players {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 45px;
+    margin-bottom: 25px;
+}
+.player {
+    text-align: center;
+}
+.avatar {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    margin: auto auto 8px;
+    font-size: 24px;
+    font-weight: 900;
+    background: linear-gradient(135deg,#8d55ff,#35d5ff);
+}
+.enemy {
+    background: linear-gradient(135deg,#ff3c8c,#ff753b);
+}
+.vs {
+    font-size: 30px;
+    font-weight: 900;
+    color: #9c63ff;
+}
+.cases {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 5px 2px 15px;
+}
+.case {
+    min-width: 145px;
+    background: #131724;
+    border: 1px solid #ffffff10;
+    border-radius: 14px;
+    padding: 10px;
+    text-align: center;
+    cursor: pointer;
+}
+.case.selected {
+    border-color: #a368ff;
+    box-shadow: 0 0 25px #8748ff30;
+}
+.case-art {
+    height: 95px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    font-size: 42px;
+    background:
+        radial-gradient(circle,var(--color),transparent 65%),
+        #171b27;
+}
+.case-name {
+    margin-top: 10px;
+    font-weight: 800;
+}
+.case-price {
+    margin-top: 5px;
+    color: #ffda61;
+    font-size: 13px;
+}
+button {
+    border: 0;
+    color: white;
+    font-weight: 900;
+    cursor: pointer;
+}
+.start {
+    width: 100%;
+    padding: 16px;
+    border-radius: 12px;
+    margin-top: 10px;
+    background: linear-gradient(135deg,#9a5cff,#6034ff);
+    font-size: 15px;
+}
+.start:disabled {
+    opacity: .5;
+}
+.result {
+    margin-top: 18px;
+}
+.round {
+    background: #090c14;
+    border: 1px solid #ffffff0d;
+    border-radius: 15px;
+    padding: 18px;
+    text-align: center;
+}
+.round-title {
+    color: #969eb4;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+.items {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-top: 15px;
+}
+.item {
+    min-width: 130px;
+    padding: 15px;
+    border-radius: 12px;
+    background: #121622;
+}
+.item-icon {
+    font-size: 42px;
+}
+.item-name {
+    font-size: 12px;
+    margin-top: 7px;
+}
+.item-value {
+    color: #ffda61;
+    font-size: 12px;
+    margin-top: 5px;
+}
+.winner {
+    margin-top: 15px;
+    color: #c99cff;
+    font-size: 20px;
+    font-weight: 900;
+}
+.reel {
+    height: 130px;
+    margin-top: 20px;
+    overflow: hidden;
+    border-radius: 12px;
+    background: #070910;
+    position: relative;
+}
+.reel-track {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: absolute;
+    left: 0;
+}
+.reel-item {
+    flex: 0 0 105px;
+    height: 95px;
+    border-radius: 10px;
+    background: #151a25;
+    display: grid;
+    place-items: center;
+    font-size: 34px;
+    border: 1px solid #ffffff0c;
+}
+.pointer {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: white;
+    box-shadow: 0 0 12px white;
+}
+@media(max-width:600px) {
+    h1 {
+        font-size: 30px;
+    }
+    .players {
+        gap: 18px;
+    }
+    .avatar {
+        width: 58px;
+        height: 58px;
+        font-size: 19px;
+    }
+    .items {
+        gap: 10px;
+    }
+    .item {
+        min-width: 110px;
+    }
+}
+</style>
+</head>
+<body>
+<header>
+    <div class="logo">L1NXSUPGRADE</div>
+    <div class="balance">
+        🪙 <b id="balance">5000</b>
+    </div>
+</header>
+<main>
+<h1>⚔️ Case Battle</h1>
+<div class="subtitle">
+    Выбери кейс и сразись против соперника.
+</div>
+<div class="battle">
+<div class="players">
+    <div class="player">
+        <div class="avatar">L</div>
+        <b>L1nxs</b>
+        <div class="subtitle">Ты</div>
+    </div>
+    <div class="vs">VS</div>
+    <div class="player">
+        <div class="avatar enemy">AI</div>
+        <b>Rival_07</b>
+        <div class="subtitle">Бот</div>
+    </div>
+</div>
+<div class="cases" id="cases"></div>
+<button
+    id="start"
+    class="start"
+    onclick="startBattle()">
+    НАЧАТЬ BATTLE
+</button>
+<div id="result" class="result"></div>
+</div>
+</main>
+<script>
+let balance = 5000;
+let selected = 0;
+let playing = false;
+const cases = [
+{
+    name:"Neon",
+    price:500,
+    icon:"✦",
+    color:"#8b55ff",
+    items:[
+        ["Cyber Pistol",150,"🔫"],
+        ["Neon Knife",450,"🗡️"],
+        ["Pulse Rifle",800,"⚡"],
+        ["Void Blade",1500,"🔪"],
+        ["Quantum",2500,"💎"]
+    ]
+},
+{
+    name:"Shadow",
+    price:750,
+    icon:"◈",
+    color:"#4575ff",
+    items:[
+        ["Shadow SMG",250,"🔫"],
+        ["Ghost Knife",700,"🗡️"],
+        ["Black Rifle",1200,"⚡"],
+        ["Dark Blade",2300,"🔪"],
+        ["Phantom",4000,"💎"]
+    ]
+},
+{
+    name:"Cyber",
+    price:1000,
+    icon:"◆",
+    color:"#ff3e9d",
+    items:[
+        ["Cyber Pistol",400,"🔫"],
+        ["Synth Knife",1000,"🗡️"],
+        ["Chrome Rifle",2200,"⚡"],
+        ["Cyber Blade",4500,"🔪"],
+        ["Dragon",8000,"🐉"]
+    ]
+},
+{
+    name:"Elite",
+    price:1500,
+    icon:"♛",
+    color:"#ffd45a",
+    items:[
+        ["Elite SMG",700,"🔫"],
+        ["Golden Knife",1800,"🗡️"],
+        ["Royal Rifle",3500,"⚡"],
+        ["Solar Blade",7000,"🔪"],
+        ["Crown",12000,"👑"]
+    ]
+}
+];
+function renderCases() {
+    document.getElementById("cases").innerHTML =
+        cases.map((c,index)=>`
+        <div
+            class="case ${index===selected?'selected':''}"
+            onclick="selectCase(${index})">
+            <div
+                class="case-art"
+                style="--color:${c.color}">
+                ${c.icon}
+            </div>
+            <div class="case-name">
+                ${c.name}
+            </div>
+            <div class="case-price">
+                🪙 ${c.price}
+            </div>
+        </div>
+        `).join("");
+}
+function selectCase(index) {
+    if(playing) return;
+    selected = index;
+    renderCases();
+}
+function randomItem(items) {
+    return items[
+        Math.floor(Math.random()*items.length)
+    ];
+}
+function updateBalance() {
+    document.getElementById("balance")
+        .textContent = balance;
+}
+function startBattle() {
+    if(playing) return;
+    const c = cases[selected];
+    if(balance < c.price) {
+        alert("Недостаточно виртуальных кредитов.");
+        return;
+    }
+    balance -= c.price;
+    updateBalance();
+    playing = true;
+    document.getElementById("start").disabled = true;
+    const result =
+        document.getElementById("result");
+    result.innerHTML = `
+        <div class="round">
+            <div class="round-title">
+                Открытие кейсов
+            </div>
+            <div class="reel">
+                <div
+                    id="reel"
+                    class="reel-track">
+                </div>
+                <div class="pointer"></div>
+            </div>
+        </div>
+    `;
+    const reel =
+        document.getElementById("reel");
+    let html = "";
+    for(let i=0;i<30;i++) {
+        const item =
+            randomItem(c.items);
+        html += `
+            <div class="reel-item">
+                ${item[2]}
+            </div>
+        `;
+    }
+    reel.innerHTML = html;
+    setTimeout(()=>finishBattle(c),1800);
+}
+function finishBattle(c) {
+    const player =
+        randomItem(c.items);
+    const bot =
+        randomItem(c.items);
+    const playerValue = player[1];
+    const botValue = bot[1];
+    let winner;
+    if(playerValue >= botValue) {
+        winner = "🏆 ПОБЕДА L1NXS";
+    } else {
+        winner = "🤖 ПОБЕДА RIVAL_07";
+    }
+    document.getElementById("result").innerHTML = `
+        <div class="round">
+            <div class="round-title">
+                Результат раунда
+            </div>
+            <div class="items">
+                <div class="item">
+                    <div class="item-icon">
+                        ${player[2]}
+                    </div>
+                    <b>L1nxs</b>
+                    <div class="item-name">
+                        ${player[0]}
+                    </div>
+                    <div class="item-value">
+                        🪙 ${playerValue}
+                    </div>
+                </div>
+                <div class="item">
+                    <div class="item-icon">
+                        ${bot[2]}
+                    </div>
+                    <b>Rival_07</b>
+                    <div class="item-name">
+                        ${bot[0]}
+                    </div>
+                    <div class="item-value">
+                        🪙 ${botValue}
+                    </div>
+                </div>
+            </div>
+            <div class="winner">
+                ${winner}
+            </div>
+        </div>
+    `;
+    playing = false;
+    document.getElementById("start").disabled = false;
+}
+renderCases();
+updateBalance();
+</script>
+</body>
+</html>
