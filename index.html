@@ -1,565 +1,638 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta name="theme-color" content="#090b12">
-<meta name="description" content="L1nxsupgrade — кейсы, Case Battle, Upgrade и инвентарь.">
-<title>L1nxsupgrade — Case Battle</title>
+
+<title>L1NXSUPGRADE v2</title>
+
+<meta name="description" content="L1NXSUPGRADE — кейсы, Case Battle и Upgrade">
 
 <style>
-*{box-sizing:border-box}
 
-html,body{
-  margin:0;
-  min-height:100%;
-  font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  background:#080a10;
-  color:#f5f7ff;
+*{
+box-sizing:border-box;
+-webkit-tap-highlight-color:transparent;
 }
 
 body{
-  background:
-    radial-gradient(circle at 50% -10%,#202844 0,#0c101b 35%,#080a10 70%);
-  overflow-x:hidden;
+margin:0;
+background:
+radial-gradient(circle at 50% -20%,#35205d 0%,#111321 35%,#07080d 75%);
+color:#fff;
+font-family:Arial,Helvetica,sans-serif;
+min-height:100vh;
 }
 
-button,input,select{font:inherit}
-button{cursor:pointer;border:0;color:inherit}
+button{
+font-family:inherit;
+border:0;
+cursor:pointer;
+}
 
 .header{
-  position:sticky;
-  top:0;
-  z-index:20;
-  height:64px;
-  border-bottom:1px solid #202636;
-  background:rgba(8,10,16,.92);
-  backdrop-filter:blur(18px);
-  display:flex;
-  align-items:center;
-  padding:0 18px;
-  gap:18px;
+height:70px;
+display:flex;
+align-items:center;
+gap:15px;
+padding:0 18px;
+background:rgba(7,8,13,.94);
+border-bottom:1px solid #252638;
+position:sticky;
+top:0;
+z-index:100;
+backdrop-filter:blur(15px);
 }
 
 .logo{
-  font-weight:950;
-  letter-spacing:1.5px;
-  font-size:20px;
-  white-space:nowrap;
+font-size:21px;
+font-weight:900;
+letter-spacing:1px;
 }
 
-.logo span{color:#8d63ff}
-
-.nav{
-  display:flex;
-  gap:7px;
+.logo span{
+color:#9b5cff;
 }
 
-.nav button{
-  background:transparent;
-  padding:10px 12px;
-  color:#aab2c7;
-  border-radius:10px;
+.version{
+font-size:9px;
+color:#706b85;
+margin-left:4px;
 }
 
-.nav button.active,
-.nav button:hover{
-  background:#171c2a;
-  color:#fff;
+.menu{
+display:flex;
+gap:5px;
+}
+
+.menu button{
+background:transparent;
+color:#9699ad;
+padding:11px 13px;
+border-radius:9px;
+}
+
+.menu button:hover,
+.menu button.active{
+background:#191727;
+color:#fff;
 }
 
 .balance{
-  margin-left:auto;
-  background:#121724;
-  border:1px solid #2b3347;
-  border-radius:12px;
-  padding:9px 12px;
-  font-weight:800;
-  white-space:nowrap;
+margin-left:auto;
+background:#131522;
+border:1px solid #303247;
+padding:10px 14px;
+border-radius:10px;
+font-weight:bold;
 }
 
-.balance b{color:#b991ff}
-
-.deposit{
-  background:#8c55ff;
-  padding:10px 14px;
-  border-radius:11px;
-  font-weight:900;
+.balance span{
+color:#a968ff;
 }
 
-.deposit:hover{
-  filter:brightness(1.1);
+.add{
+background:linear-gradient(135deg,#8e45ff,#b65cff);
+color:#fff;
+font-weight:800;
+padding:11px 15px;
+border-radius:10px;
 }
 
-.wrap{
-  max-width:1180px;
-  margin:auto;
-  padding:24px 16px 60px;
-}
-
-.hero{
-  display:flex;
-  align-items:end;
-  justify-content:space-between;
-  gap:20px;
-  margin:12px 0 24px;
-}
-
-.hero h1{
-  font-size:32px;
-  margin:0 0 7px;
-}
-
-.hero p{
-  margin:0;
-  color:#8f99af;
-}
-
-.search{
-  width:min(330px,100%);
-  background:#101521;
-  border:1px solid #272f43;
-  border-radius:12px;
-  padding:12px 14px;
-  color:#fff;
-  outline:0;
-}
-
-.search:focus{
-  border-color:#8058ef;
-}
-
-.categories{
-  display:flex;
-  gap:8px;
-  overflow:auto;
-  padding-bottom:8px;
-  margin-bottom:18px;
-}
-
-.cat{
-  background:#101521;
-  border:1px solid #252d40;
-  color:#9da6ba;
-  border-radius:10px;
-  padding:9px 14px;
-  white-space:nowrap;
-}
-
-.cat.active{
-  background:#8152e9;
-  border-color:#986fff;
-  color:#fff;
-}
-
-.grid{
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:13px;
-}
-
-.card{
-  position:relative;
-  overflow:hidden;
-  min-height:190px;
-  background:linear-gradient(160deg,#151b2a,#0e121c);
-  border:1px solid #252d40;
-  border-radius:15px;
-  padding:16px;
-  transition:.18s;
-  box-shadow:0 12px 35px rgba(0,0,0,.18);
-}
-
-.card:hover{
-  transform:translateY(-3px);
-  border-color:#6848ae;
-}
-
-.card:after{
-  content:"";
-  position:absolute;
-  inset:auto -30% -55% 10%;
-  height:130px;
-  background:radial-gradient(circle,#794cff33,transparent 65%);
-  pointer-events:none;
-}
-
-.caseicon{
-  height:92px;
-  display:grid;
-  place-items:center;
-  font-size:58px;
-  text-shadow:0 0 30px #8b5cff88;
-}
-
-.card h3{
-  margin:2px 0 4px;
-}
-
-.meta{
-  color:#7e899e;
-  font-size:12px;
-}
-
-.price{
-  margin-top:11px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-}
-
-.price b{
-  font-size:18px;
-}
-
-.open{
-  background:#7d4ff0;
-  padding:9px 12px;
-  border-radius:9px;
-  font-weight:800;
+.container{
+max-width:1200px;
+margin:auto;
+padding:25px 15px 70px;
 }
 
 .page{
-  display:none;
+display:none;
 }
 
 .page.active{
-  display:block;
+display:block;
 }
 
-.battlebox,
-.panel{
-  background:#0f141f;
-  border:1px solid #252d40;
-  border-radius:16px;
-  padding:18px;
+.title{
+display:flex;
+justify-content:space-between;
+align-items:end;
+margin-bottom:22px;
 }
 
-.battlehead{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:18px;
+.title h1{
+margin:0;
+font-size:32px;
 }
 
-.battlehead h2{
-  margin:0;
+.title p{
+margin:7px 0 0;
+color:#888da3;
 }
 
-.select{
-  background:#171d2b;
-  color:#fff;
-  border:1px solid #2d3650;
-  border-radius:9px;
-  padding:9px;
+.search{
+width:280px;
+background:#11131e;
+border:1px solid #292c3f;
+border-radius:10px;
+padding:12px;
+color:#fff;
+outline:none;
 }
 
-.arena{
-  display:grid;
-  grid-template-columns:1fr 100px 1fr;
-  gap:12px;
-  align-items:center;
+.filters{
+display:flex;
+gap:8px;
+overflow-x:auto;
+margin-bottom:20px;
+padding-bottom:4px;
 }
 
-.fighter{
-  background:#131927;
-  border:1px solid #283149;
-  border-radius:14px;
-  padding:18px;
-  text-align:center;
+.filter{
+background:#11131e;
+border:1px solid #282b3e;
+color:#999daf;
+padding:10px 15px;
+border-radius:9px;
+white-space:nowrap;
 }
 
-.avatar{
-  font-size:52px;
+.filter.active{
+background:#8747ed;
+color:#fff;
+border-color:#a46aff;
 }
 
-.fighter small{
-  color:#818ca2;
+.cases{
+display:grid;
+grid-template-columns:repeat(4,1fr);
+gap:14px;
 }
 
-.vs{
-  text-align:center;
-  font-size:22px;
-  font-weight:950;
-  color:#b790ff;
+.case{
+background:
+linear-gradient(145deg,#171a29,#0d0f17);
+border:1px solid #292d42;
+border-radius:15px;
+padding:15px;
+min-height:210px;
+transition:.2s;
+position:relative;
+overflow:hidden;
 }
 
-.reel{
-  margin:20px 0;
-  background:#090c13;
-  border:1px solid #232b3e;
-  border-radius:12px;
-  padding:15px;
-  overflow:hidden;
+.case:hover{
+transform:translateY(-4px);
+border-color:#8750d8;
 }
 
-.reelrow{
-  display:flex;
-  gap:8px;
-  min-width:max-content;
-  transition:transform 1.8s cubic-bezier(.12,.7,.15,1);
+.case-icon{
+height:105px;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:65px;
+text-shadow:0 0 35px #9b55ff;
 }
 
-.tile{
-  width:112px;
-  height:82px;
-  display:grid;
-  place-items:center;
-  background:#151b29;
-  border:1px solid #2a3348;
-  border-radius:9px;
-  font-size:12px;
-  text-align:center;
+.case-name{
+font-size:18px;
+font-weight:800;
 }
 
-.tile span{
-  display:block;
-  font-size:28px;
+.case-items{
+font-size:12px;
+color:#777e95;
+margin-top:4px;
 }
 
-.result{
-  text-align:center;
-  min-height:34px;
-  font-weight:900;
-  color:#b790ff;
+.case-bottom{
+display:flex;
+align-items:center;
+justify-content:space-between;
+margin-top:15px;
 }
 
-.bigbtn{
-  width:100%;
-  padding:14px;
-  border-radius:11px;
-  background:#8b55ff;
-  font-weight:950;
-  margin-top:10px;
+.case-price{
+font-size:18px;
+font-weight:900;
+color:#c28cff;
 }
 
-.bigbtn:disabled{
-  opacity:.45;
-  cursor:not-allowed;
+.open{
+background:#8248ee;
+color:white;
+font-weight:800;
+padding:9px 13px;
+border-radius:8px;
 }
 
-.upgrade{
-  display:grid;
-  grid-template-columns:1fr 160px 1fr;
-  gap:15px;
-  align-items:center;
-}
-
-.itembox{
-  min-height:170px;
-  background:#131927;
-  border:1px solid #293149;
-  border-radius:14px;
-  display:grid;
-  place-items:center;
-  text-align:center;
-}
-
-.arrow{
-  text-align:center;
-  font-size:32px;
-  color:#a87bff;
-}
-
-.inventory{
-  display:grid;
-  grid-template-columns:repeat(5,1fr);
-  gap:12px;
-}
-
-.inv{
-  background:#121825;
-  border:1px solid #273047;
-  border-radius:12px;
-  padding:15px;
-  text-align:center;
-}
-
-.inv .ico{
-  font-size:38px;
-}
-
-.empty{
-  grid-column:1/-1;
-  text-align:center;
-  color:#7e899e;
-  padding:35px;
-}
-
-.profile{
-  display:grid;
-  grid-template-columns:120px 1fr;
-  gap:18px;
-  align-items:center;
-}
-
-.profilepic{
-  width:100px;
-  height:100px;
-  border-radius:50%;
-  display:grid;
-  place-items:center;
-  background:#191f2e;
-  border:1px solid #343d55;
-  font-size:48px;
+.open:active{
+transform:scale(.95);
 }
 
 .notice{
-  padding:11px 13px;
-  background:#151a27;
-  border:1px solid #2a3247;
-  border-radius:10px;
-  color:#9ca6ba;
-  margin-top:15px;
-  font-size:13px;
+margin-top:20px;
+padding:13px;
+border:1px solid #292d40;
+background:#11131d;
+border-radius:10px;
+color:#81869c;
+font-size:12px;
+}
+
+.battle{
+background:#10121c;
+border:1px solid #292d41;
+border-radius:16px;
+padding:20px;
+}
+
+.battle-top{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-bottom:20px;
+}
+
+.select{
+background:#171a27;
+border:1px solid #30344a;
+color:#fff;
+padding:10px;
+border-radius:9px;
+}
+
+.players{
+display:grid;
+grid-template-columns:1fr 80px 1fr;
+gap:15px;
+align-items:center;
+}
+
+.player{
+background:#151824;
+border:1px solid #2b3045;
+border-radius:14px;
+padding:20px;
+text-align:center;
+}
+
+.avatar{
+font-size:55px;
+}
+
+.player-name{
+font-weight:900;
+margin-top:5px;
+}
+
+.player-item{
+margin-top:12px;
+color:#b78aff;
+font-weight:bold;
+}
+
+.vs{
+font-size:25px;
+font-weight:900;
+text-align:center;
+color:#9b5cff;
+}
+
+.reel{
+height:100px;
+margin:20px 0;
+overflow:hidden;
+background:#080a10;
+border:1px solid #282d41;
+border-radius:10px;
+padding:9px;
+}
+
+.reel-track{
+display:flex;
+gap:8px;
+height:80px;
+transition:transform 1.8s cubic-bezier(.1,.7,.1,1);
+}
+
+.reel-item{
+min-width:115px;
+height:80px;
+background:#161a28;
+border:1px solid #30364d;
+border-radius:8px;
+display:flex;
+flex-direction:column;
+justify-content:center;
+align-items:center;
+font-size:11px;
+}
+
+.reel-item b{
+font-size:27px;
+}
+
+.battle-result{
+height:40px;
+display:flex;
+justify-content:center;
+align-items:center;
+font-weight:900;
+color:#b77cff;
+}
+
+.main-button{
+width:100%;
+padding:15px;
+background:linear-gradient(135deg,#8648f2,#a653ff);
+color:#fff;
+border-radius:10px;
+font-size:15px;
+font-weight:900;
+}
+
+.main-button:disabled{
+opacity:.4;
+}
+
+.inventory{
+display:grid;
+grid-template-columns:repeat(5,1fr);
+gap:12px;
+}
+
+.item{
+background:#121521;
+border:1px solid #292e43;
+border-radius:12px;
+padding:18px;
+text-align:center;
+}
+
+.item-icon{
+font-size:42px;
+}
+
+.item-name{
+font-weight:bold;
+margin-top:7px;
+}
+
+.item-price{
+font-size:12px;
+color:#9f68ff;
+margin-top:4px;
+}
+
+.empty{
+grid-column:1/-1;
+text-align:center;
+padding:50px;
+color:#747a91;
+}
+
+.upgrade-box{
+background:#10131d;
+border:1px solid #292e42;
+border-radius:16px;
+padding:20px;
+}
+
+.upgrade-grid{
+display:grid;
+grid-template-columns:1fr 100px 1fr;
+gap:15px;
+align-items:center;
+}
+
+.upgrade-item{
+height:190px;
+display:flex;
+flex-direction:column;
+justify-content:center;
+align-items:center;
+background:#151925;
+border:1px solid #30354b;
+border-radius:14px;
+}
+
+.upgrade-arrow{
+text-align:center;
+font-size:35px;
+color:#a864ff;
+}
+
+.chance{
+font-size:24px;
+font-weight:900;
+color:#a968ff;
+margin-top:8px;
+}
+
+.profile{
+background:#10131d;
+border:1px solid #292e42;
+border-radius:16px;
+padding:25px;
+display:flex;
+align-items:center;
+gap:20px;
+}
+
+.profile-avatar{
+width:90px;
+height:90px;
+border-radius:50%;
+background:#1a1d2b;
+border:1px solid #353a51;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:45px;
 }
 
 .modal{
-  position:fixed;
-  inset:0;
-  background:#0009;
-  display:none;
-  place-items:center;
-  z-index:50;
-  padding:18px;
+position:fixed;
+inset:0;
+background:#000b;
+display:none;
+align-items:center;
+justify-content:center;
+padding:20px;
+z-index:500;
 }
 
 .modal.show{
-  display:grid;
+display:flex;
 }
 
-.modalbox{
-  width:min(420px,100%);
-  background:#111724;
-  border:1px solid #303a53;
-  border-radius:17px;
-  padding:20px;
-}
-
-.modalbox h3{
-  margin-top:0;
+.modal-content{
+width:100%;
+max-width:400px;
+background:#121521;
+border:1px solid #363b54;
+border-radius:16px;
+padding:22px;
 }
 
 .close{
-  float:right;
-  background:#20283a;
-  border-radius:8px;
-  padding:5px 9px;
+float:right;
+background:#25293a;
+color:#fff;
+border-radius:7px;
+padding:5px 10px;
+}
+
+.deposit-option{
+width:100%;
+margin-top:10px;
+padding:13px;
+background:#202438;
+color:#fff;
+border-radius:9px;
+font-weight:bold;
+}
+
+.deposit-option:hover{
+background:#8248ee;
 }
 
 @media(max-width:900px){
-  .grid{
-    grid-template-columns:repeat(3,1fr);
-  }
 
-  .inventory{
-    grid-template-columns:repeat(4,1fr);
-  }
+.cases{
+grid-template-columns:repeat(3,1fr);
+}
+
+.inventory{
+grid-template-columns:repeat(4,1fr);
+}
+
 }
 
 @media(max-width:650px){
-  .header{
-    padding:0 10px;
-    gap:7px;
-  }
 
-  .nav{
-    display:none;
-  }
-
-  .logo{
-    font-size:17px;
-  }
-
-  .balance{
-    font-size:12px;
-    padding:8px;
-  }
-
-  .deposit{
-    padding:8px 10px;
-    font-size:12px;
-  }
-
-  .wrap{
-    padding:18px 11px 40px;
-  }
-
-  .hero{
-    display:block;
-  }
-
-  .hero h1{
-    font-size:27px;
-  }
-
-  .search{
-    margin-top:14px;
-    width:100%;
-  }
-
-  .grid{
-    grid-template-columns:repeat(2,1fr);
-    gap:9px;
-  }
-
-  .card{
-    min-height:174px;
-    padding:12px;
-  }
-
-  .caseicon{
-    height:76px;
-    font-size:46px;
-  }
-
-  .price{
-    display:block;
-  }
-
-  .open{
-    width:100%;
-    margin-top:8px;
-  }
-
-  .arena{
-    grid-template-columns:1fr 45px 1fr;
-  }
-
-  .fighter{
-    padding:12px 5px;
-  }
-
-  .avatar{
-    font-size:38px;
-  }
-
-  .inventory{
-    grid-template-columns:repeat(2,1fr);
-  }
-
-  .upgrade{
-    grid-template-columns:1fr;
-  }
-
-  .arrow{
-    transform:rotate(90deg);
-  }
+.header{
+height:62px;
+padding:0 9px;
+gap:7px;
 }
+
+.logo{
+font-size:16px;
+}
+
+.version{
+display:none;
+}
+
+.menu{
+display:none;
+}
+
+.balance{
+font-size:11px;
+padding:8px;
+}
+
+.add{
+font-size:11px;
+padding:8px 9px;
+}
+
+.container{
+padding:18px 10px 50px;
+}
+
+.title{
+display:block;
+}
+
+.title h1{
+font-size:28px;
+}
+
+.search{
+width:100%;
+margin-top:15px;
+}
+
+.cases{
+grid-template-columns:repeat(2,1fr);
+gap:9px;
+}
+
+.case{
+padding:11px;
+min-height:180px;
+}
+
+.case-icon{
+height:80px;
+font-size:48px;
+}
+
+.case-name{
+font-size:15px;
+}
+
+.case-bottom{
+display:block;
+}
+
+.open{
+width:100%;
+margin-top:8px;
+}
+
+.players{
+grid-template-columns:1fr 40px 1fr;
+gap:6px;
+}
+
+.player{
+padding:10px 4px;
+}
+
+.avatar{
+font-size:38px;
+}
+
+.upgrade-grid{
+grid-template-columns:1fr;
+}
+
+.upgrade-arrow{
+transform:rotate(90deg);
+}
+
+.inventory{
+grid-template-columns:repeat(2,1fr);
+}
+
+.profile{
+padding:18px;
+}
+
+}
+
 </style>
 </head>
 
 <body>
 
+
 <header class="header">
 
 <div class="logo">
 L1NXS<span>UPGRADE</span>
+<div class="version">v2.0</div>
 </div>
 
-<nav class="nav">
+<nav class="menu">
 
-<button data-page="cases" class="active">
+<button class="active" data-page="cases">
 Кейсы
 </button>
 
@@ -582,23 +655,22 @@ Upgrade
 </nav>
 
 <div class="balance">
-Баланс:
-<b id="balance">5 000 ₽</b>
+💰 <span id="balance">5 000 ₽</span>
 </div>
 
-<button class="deposit" id="deposit">
+<button class="add" id="openDeposit">
 + Пополнить
 </button>
 
 </header>
 
 
-<main class="wrap">
+<main class="container">
 
 
-<section id="cases" class="page active">
+<section class="page active" id="cases">
 
-<div class="hero">
+<div class="title">
 
 <div>
 <h1>Кейсы</h1>
@@ -608,86 +680,85 @@ Upgrade
 <input
 class="search"
 id="search"
-placeholder="Поиск кейса..."
+placeholder="🔎 Поиск кейса..."
 >
 
 </div>
 
 
-<div class="categories">
+<div class="filters">
 
-<button class="cat active" data-filter="all">
+<button class="filter active" data-filter="all">
 Все
 </button>
 
-<button class="cat" data-filter="bonus">
+<button class="filter" data-filter="bonus">
 Бонусные
 </button>
 
-<button class="cat" data-filter="knife">
+<button class="filter" data-filter="knife">
 Ножевые
 </button>
 
-<button class="cat" data-filter="rifle">
+<button class="filter" data-filter="weapon">
 Оружие
 </button>
 
-<button class="cat" data-filter="limited">
+<button class="filter" data-filter="limited">
 Limited
 </button>
 
 </div>
 
 
-<div class="grid" id="caseGrid"></div>
+<div class="cases" id="casesList"></div>
+
 
 <div class="notice">
-В этой версии рубли — виртуальная игровая валюта.
-Реальные платежи, ставки и вывод средств не используются.
+⚠️ Все ₽ на сайте являются виртуальной игровой валютой.
+Реальные деньги не используются.
 </div>
 
 </section>
 
 
 
-<section id="battle" class="page">
+<section class="page" id="battle">
 
-<div class="hero">
+<div class="title">
 
 <div>
 <h1>Case Battle</h1>
-<p>Выбери кейс и сразись с ботом</p>
+<p>Сразись с соперником за содержимое кейса</p>
 </div>
 
 </div>
 
 
-<div class="battlebox">
+<div class="battle">
 
-<div class="battlehead">
+<div class="battle-top">
 
-<h2>1 × 1</h2>
+<h2>⚔️ 1 × 1</h2>
 
-<select id="battleCase" class="select"></select>
+<select class="select" id="battleSelect"></select>
 
 </div>
 
 
-<div class="arena">
+<div class="players">
 
-<div class="fighter">
+<div class="player">
 
 <div class="avatar">
-🧑‍🚀
+🧑
 </div>
 
-<b>L1nxs</b>
+<div class="player-name">
+L1nxs
+</div>
 
-<br>
-
-<small>Игрок</small>
-
-<div id="playerItem">
+<div class="player-item" id="myBattleItem">
 —
 </div>
 
@@ -699,19 +770,17 @@ VS
 </div>
 
 
-<div class="fighter">
+<div class="player">
 
 <div class="avatar">
 🤖
 </div>
 
-<b>Rival_07</b>
+<div class="player-name">
+Rival
+</div>
 
-<br>
-
-<small>Бот</small>
-
-<div id="botItem">
+<div class="player-item" id="enemyBattleItem">
 —
 </div>
 
@@ -722,17 +791,20 @@ VS
 
 <div class="reel">
 
-<div class="reelrow" id="reel"></div>
+<div class="reel-track" id="reel"></div>
 
 </div>
 
 
-<div class="result" id="battleResult">
-Готов к бою
+<div class="battle-result" id="battleResult">
+Готов к битве
 </div>
 
 
-<button class="bigbtn" id="startBattle">
+<button
+class="main-button"
+id="battleButton"
+>
 НАЧАТЬ БИТВУ
 </button>
 
@@ -742,121 +814,130 @@ VS
 
 
 
-<section id="upgrade" class="page">
+<section class="page" id="upgrade">
 
-<div class="hero">
+<div class="title">
 
 <div>
 <h1>Upgrade</h1>
-<p>Попробуй улучшить предмет</p>
+<p>Улучши предмет из своего инвентаря</p>
 </div>
 
 </div>
 
 
-<div class="panel">
+<div class="upgrade-box">
 
-<div class="upgrade">
+<div class="upgrade-grid">
 
-<div class="itembox" id="upgradeFrom">
-Выбери предмет в инвентаре
+<div class="upgrade-item" id="selectedItem">
+
+<div style="font-size:45px">
+❔
 </div>
 
-<div class="arrow">
+Выбери предмет
+
+</div>
+
+
+<div class="upgrade-arrow">
 ➜
 </div>
 
-<div class="itembox">
 
-<div>
+<div class="upgrade-item">
 
-<div style="font-size:42px">
+<div style="font-size:45px">
 💎
 </div>
 
-<b>
-Шанс улучшения
-</b>
+<div>
+Шанс
+</div>
+
+<div
+class="chance"
+id="upgradeChance"
+>
+—
+</div>
+
+</div>
+
+</div>
+
 
 <br>
 
-<span id="chance">
-—
-</span>
-
-</div>
-
-</div>
-
-</div>
-
-
 <button
-class="bigbtn"
-id="doUpgrade"
+class="main-button"
+id="upgradeButton"
 disabled
 >
 UPGRADE
 </button>
 
-
-<div class="notice">
-Upgrade использует только предметы и виртуальные рубли из этого демо.
-</div>
-
 </div>
 
 </section>
 
 
 
-<section id="inventory" class="page">
+<section class="page" id="inventory">
 
-<div class="hero">
+<div class="title">
 
 <div>
 <h1>Инвентарь</h1>
-<p>Твои выигранные предметы</p>
+<p>Твои предметы</p>
 </div>
 
 </div>
 
-<div class="inventory" id="inventoryGrid"></div>
+
+<div
+class="inventory"
+id="inventoryList"
+></div>
 
 </section>
 
 
 
-<section id="profile" class="page">
+<section class="page" id="profile">
 
-<div class="hero">
+<div class="title">
 
 <div>
 <h1>Профиль</h1>
-<p>Настройки демо-аккаунта</p>
+<p>Демо-профиль L1nxsupgrade</p>
 </div>
 
 </div>
 
 
-<div class="panel profile">
+<div class="profile">
 
-<div class="profilepic">
+<div class="profile-avatar">
 👤
 </div>
 
 <div>
 
-<h2 style="margin:0">
+<h2>
 L1nxs
 </h2>
 
-<p style="color:#8f99af">
-Уровень 1 · Demo account
+<p style="color:#858ba0">
+Уровень 1
 </p>
 
-<button class="deposit" id="reset">
-Сбросить демо
+<button
+class="add"
+id="reset"
+>
+Сбросить аккаунт
 </button>
 
 </div>
@@ -871,30 +952,45 @@ L1nxs
 
 <div class="modal" id="modal">
 
-<div class="modalbox">
+<div class="modal-content">
 
-<button class="close" id="close">
+<button
+class="close"
+id="closeModal"
+>
 ×
 </button>
 
-<h3>
+<h2>
 Пополнение
-</h3>
+</h2>
 
-<p style="color:#9aa4b8">
-В демонстрационной версии можно добавить виртуальный баланс.
+<p style="color:#858ba0">
+Добавить виртуальные рубли
 </p>
 
-<button class="bigbtn" data-add="1000">
-+1 000 ₽
+
+<button
+class="deposit-option"
+data-money="1000"
+>
++ 1 000 ₽
 </button>
 
-<button class="bigbtn" data-add="5000">
-+5 000 ₽
+
+<button
+class="deposit-option"
+data-money="5000"
+>
++ 5 000 ₽
 </button>
 
-<button class="bigbtn" data-add="10000">
-+10 000 ₽
+
+<button
+class="deposit-option"
+data-money="10000"
+>
++ 10 000 ₽
 </button>
 
 </div>
@@ -905,12 +1001,32 @@ L1nxs
 
 <script>
 
-const CASES=[
+
+/* =========================
+   ДАННЫЕ
+========================= */
+
+
+const cases=[
+
+{
+name:"Starter",
+price:29,
+type:"bonus",
+icon:"🎁",
+items:[
+["Pistol",20,"🔫"],
+["SMG",45,"🔫"],
+["Rifle",80,"⚡"],
+["Knife",140,"🗡️"],
+["Lucky",300,"🍀"]
+]
+},
 
 {
 name:"Neon",
 price:49,
-cat:"bonus",
+type:"bonus",
 icon:"✦",
 items:[
 ["Cyber Pistol",35,"🔫"],
@@ -924,7 +1040,7 @@ items:[
 {
 name:"Shadow",
 price:99,
-cat:"rifle",
+type:"weapon",
 icon:"◈",
 items:[
 ["Shadow SMG",70,"🔫"],
@@ -938,7 +1054,7 @@ items:[
 {
 name:"Cyber",
 price:249,
-cat:"rifle",
+type:"weapon",
 icon:"◆",
 items:[
 ["Cyber Pistol",150,"🔫"],
@@ -952,7 +1068,7 @@ items:[
 {
 name:"Knife Rush",
 price:399,
-cat:"knife",
+type:"knife",
 icon:"🗡️",
 items:[
 ["Steel Knife",250,"🗡️"],
@@ -964,9 +1080,23 @@ items:[
 },
 
 {
+name:"Gold",
+price:599,
+type:"limited",
+icon:"🥇",
+items:[
+["Gold Pistol",400,"🔫"],
+["Gold SMG",850,"🔫"],
+["Gold Rifle",1700,"⚡"],
+["Gold Knife",3500,"🗡️"],
+["King",7000,"👑"]
+]
+},
+
+{
 name:"Limited",
 price:799,
-cat:"limited",
+type:"limited",
 icon:"♛",
 items:[
 ["Elite SMG",500,"🔫"],
@@ -980,7 +1110,7 @@ items:[
 {
 name:"Ultra",
 price:1499,
-cat:"limited",
+type:"limited",
 icon:"💠",
 items:[
 ["Crystal",900,"💎"],
@@ -989,64 +1119,46 @@ items:[
 ["Imperial",8500,"🔪"],
 ["Galaxy",16000,"🌌"]
 ]
-},
-
-{
-name:"Starter",
-price:29,
-cat:"bonus",
-icon:"🎁",
-items:[
-["Pistol",20,"🔫"],
-["SMG",45,"🔫"],
-["Rifle",80,"⚡"],
-["Knife",140,"🗡️"],
-["Lucky",300,"🍀"]
-]
-},
-
-{
-name:"Gold",
-price:599,
-cat:"limited",
-icon:"🥇",
-items:[
-["Gold Pistol",400,"🔫"],
-["Gold SMG",850,"🔫"],
-["Gold Rifle",1700,"⚡"],
-["Gold Knife",3500,"🗡️"],
-["King",7000,"👑"]
-]
 }
 
 ];
 
 
-let state=
-JSON.parse(localStorage.getItem("l1nx_state")||"null")
-||
-{
+/* =========================
+   СОХРАНЕНИЕ
+========================= */
+
+
+let saved=
+localStorage.getItem("L1NXSUPGRADE_V2");
+
+
+let state=saved
+?JSON.parse(saved)
+:{
 balance:5000,
 inventory:[]
 };
 
-let filter="all";
 
-let selectedBattle=0;
+let currentFilter="all";
 
-let upgradeIndex=null;
-
-
-const money=n =>
-n.toLocaleString("ru-RU")+" ₽";
+let selectedUpgrade=null;
 
 
 function save(){
 
 localStorage.setItem(
-"l1nx_state",
+"L1NXSUPGRADE_V2",
 JSON.stringify(state)
 );
+
+}
+
+
+function money(value){
+
+return value.toLocaleString("ru-RU")+" ₽";
 
 }
 
@@ -1059,63 +1171,100 @@ document.getElementById("balance")
 }
 
 
-function randomItem(c){
+/* =========================
+   СТРАНИЦЫ
+========================= */
 
-return c.items[
-Math.floor(Math.random()*c.items.length)
-];
 
-}
+document
+.querySelectorAll(".menu button")
+.forEach(button=>{
+
+button.onclick=()=>{
+
+document
+.querySelectorAll(".menu button")
+.forEach(x=>x.classList.remove("active"));
+
+button.classList.add("active");
+
+
+document
+.querySelectorAll(".page")
+.forEach(page=>page.classList.remove("active"));
+
+
+document
+.getElementById(button.dataset.page)
+.classList.add("active");
+
+
+if(button.dataset.page==="inventory")
+renderInventory();
+
+};
+
+});
+
+
+/* =========================
+   КЕЙСЫ
+========================= */
 
 
 function renderCases(){
 
-const q=
+const list=
+document.getElementById("casesList");
+
+const search=
 document.getElementById("search")
 .value
 .toLowerCase();
 
-const grid=
-document.getElementById("caseGrid");
 
-grid.innerHTML="";
+list.innerHTML="";
 
 
-CASES
+cases
+.filter(c=>
 
-.filter(c =>
-(filter==="all" || c.cat===filter)
+(currentFilter==="all"
+||c.type===currentFilter)
+
 &&
-c.name.toLowerCase().includes(q)
+c.name
+.toLowerCase()
+.includes(search)
+
 )
+.forEach((c,index)=>{
 
-.forEach((c)=>{
+const card=
+document.createElement("div");
 
-const el=
-document.createElement("article");
-
-el.className="card";
+card.className="case";
 
 
-el.innerHTML=`
+card.innerHTML=`
 
-<div class="caseicon">
+<div class="case-icon">
 ${c.icon}
 </div>
 
-<h3>
+<div class="case-name">
 ${c.name}
-</h3>
-
-<div class="meta">
-${c.items.length} предметов · виртуальный кейс
 </div>
 
-<div class="price">
+<div class="case-items">
+${c.items.length} предметов
+</div>
 
-<b>
+<div class="case-bottom">
+
+<div class="case-price">
 ${money(c.price)}
-</b>
+</div>
 
 <button class="open">
 Открыть
@@ -1125,29 +1274,72 @@ ${money(c.price)}
 `;
 
 
-el.querySelector(".open")
-.onclick=() =>
-openCase(
-CASES.indexOf(c)
-);
+card
+.querySelector(".open")
+.onclick=()=>openCase(index);
 
 
-grid.appendChild(el);
+list.appendChild(card);
 
 });
 
 }
 
 
-function openCase(i){
+document
+.querySelectorAll(".filter")
+.forEach(button=>{
 
-const c=CASES[i];
+button.onclick=()=>{
+
+document
+.querySelectorAll(".filter")
+.forEach(x=>
+x.classList.remove("active")
+);
+
+button.classList.add("active");
+
+currentFilter=
+button.dataset.filter;
+
+renderCases();
+
+};
+
+});
+
+
+document
+.getElementById("search")
+.oninput=renderCases;
+
+
+/* =========================
+   ОТКРЫТИЕ КЕЙСА
+========================= */
+
+
+function randomItem(caseData){
+
+return caseData.items[
+Math.floor(
+Math.random()*caseData.items.length
+)
+];
+
+}
+
+
+function openCase(index){
+
+const c=cases[index];
 
 
 if(state.balance<c.price){
 
 alert(
-"Недостаточно виртуальных рублей"
+"Недостаточно виртуальных рублей!"
 );
 
 return;
@@ -1170,10 +1362,6 @@ icon:item[2]
 });
 
 
-state.inventory=
-state.inventory.slice(0,40);
-
-
 save();
 
 updateBalance();
@@ -1182,27 +1370,39 @@ renderInventory();
 
 
 alert(
-`Ты получил: ${item[2]} ${item[0]} — ${money(item[1])}`
+"🎉 Ты получил\n\n"+
+item[2]+" "+
+item[0]+
+"\n\n"+
+money(item[1])
 );
 
 }
 
 
+/* =========================
+   ИНВЕНТАРЬ
+========================= */
+
+
 function renderInventory(){
 
-const g=
-document.getElementById("inventoryGrid");
+const list=
+document.getElementById("inventoryList");
 
-g.innerHTML="";
+list.innerHTML="";
 
 
-if(!state.inventory.length){
+if(state.inventory.length===0){
 
-g.innerHTML=
-`
+list.innerHTML=`
+
 <div class="empty">
-Инвентарь пуст. Открой первый кейс.
+🎒 Инвентарь пуст
+<br><br>
+Открой кейс, чтобы получить предмет.
 </div>
+
 `;
 
 return;
@@ -1210,71 +1410,107 @@ return;
 }
 
 
-state.inventory.forEach((x,i)=>{
+state.inventory.forEach((item,index)=>{
 
-const d=
+const element=
 document.createElement("div");
 
-d.className="inv";
+element.className="item";
 
 
-d.innerHTML=`
+element.innerHTML=`
 
-<div class="ico">
-${x.icon}
+<div class="item-icon">
+${item.icon}
 </div>
 
-<b>
-${x.name}
-</b>
+<div class="item-name">
+${item.name}
+</div>
 
-<br>
-
-<small>
-${money(x.value)}
-</small>
+<div class="item-price">
+${money(item.value)}
+</div>
 
 `;
 
 
-d.onclick=() =>
-selectUpgrade(i);
+element.onclick=()=>selectUpgrade(index);
 
 
-g.appendChild(d);
+list.appendChild(element);
 
 });
 
 }
 
 
-function selectUpgrade(i){
-
-upgradeIndex=i;
-
-const x=
-state.inventory[i];
+/* =========================
+   UPGRADE
+========================= */
 
 
-document.getElementById("upgradeFrom")
+function selectUpgrade(index){
+
+selectedUpgrade=index;
+
+
+const item=
+state.inventory[index];
+
+
+document
+.getElementById("selectedItem")
 .innerHTML=`
 
-<div>
-
-<div style="font-size:42px">
-${x.icon}
+<div style="font-size:45px">
+${item.icon}
 </div>
 
 <b>
-${x.name}
+${item.name}
 </b>
 
-<br>
-
-${money(x.value)}
-
+<div style="color:#a968ff">
+${money(item.value)}
 </div>
+
 `;
+
+
+let chance=
+Math.min(
+95,
+Math.max(
+10,
+55+Math.floor(item.value/100)
+)
+);
+
+
+document
+.getElementById("upgradeChance")
+.textContent=
+chance+"%";
+
+
+document
+.getElementById("upgradeButton")
+.disabled=false;
+
+}
+
+
+document
+.getElementById("upgradeButton")
+.onclick=()=>{
+
+if(selectedUpgrade===null)
+return;
+
+
+const item=
+state.inventory[selectedUpgrade];
 
 
 const chance=
@@ -1282,121 +1518,114 @@ Math.min(
 95,
 Math.max(
 10,
-Math.round(55+x.value/100)
+55+Math.floor(item.value/100)
 )
 );
 
 
-document.getElementById("chance")
-.textContent=chance+"%";
+if(Math.random()*100<chance){
+
+const reward=
+item.value*2;
 
 
-document.getElementById("doUpgrade")
-.disabled=false;
+state.balance+=reward;
+
+
+alert(
+"🔥 UPGRADE УСПЕШЕН!\n\n"+
+"+"+money(reward)
+);
+
+}else{
+
+alert(
+"❌ Upgrade не удался.\n\nПредмет потерян."
+);
 
 }
 
 
-document
-.querySelectorAll(".nav button")
-.forEach(b => {
-
-b.onclick=() =>
-showPage(
-b.dataset.page
-);
-
-});
-
-
-function showPage(id){
-
-document
-.querySelectorAll(".page")
-.forEach(x =>
-x.classList.remove("active")
+state.inventory.splice(
+selectedUpgrade,
+1
 );
 
 
-document
-.getElementById(id)
-.classList.add("active");
+selectedUpgrade=null;
 
 
 document
-.querySelectorAll(".nav button")
-.forEach(x =>
-x.classList.toggle(
-"active",
-x.dataset.page===id
-)
-);
+.getElementById("upgradeButton")
+.disabled=true;
 
 
-if(id==="inventory")
+document
+.getElementById("selectedItem")
+.innerHTML=`
+
+<div style="font-size:45px">
+❔
+</div>
+
+Выбери предмет
+`;
+
+
+document
+.getElementById("upgradeChance")
+.textContent="—";
+
+
+save();
+
+updateBalance();
+
 renderInventory();
-
-}
-
-
-document
-.querySelectorAll(".cat")
-.forEach(b=>{
-
-b.onclick=()=>{
-
-filter=b.dataset.filter;
-
-document
-.querySelectorAll(".cat")
-.forEach(x =>
-x.classList.remove("active")
-);
-
-b.classList.add("active");
-
-renderCases();
 
 };
 
-});
+
+/* =========================
+   CASE BATTLE
+========================= */
 
 
-document.getElementById("search")
-.oninput=renderCases;
+const battleSelect=
+document.getElementById("battleSelect");
 
 
-const select=
-document.getElementById("battleCase");
+cases.forEach((c,index)=>{
 
-
-CASES.forEach((c,i)=>{
-
-const o=
+const option=
 document.createElement("option");
 
-o.value=i;
+option.value=index;
 
-o.textContent=
-`${c.name} — ${money(c.price)}`;
+option.textContent=
+c.name+
+" — "+
+money(c.price);
 
-select.appendChild(o);
+battleSelect.appendChild(option);
 
 });
-
-
-select.onchange=() =>
-selectedBattle=+select.value;
 
 
 document
-.getElementById("startBattle")
+.getElementById("battleButton")
 .onclick=()=>{
 
-if(
-state.balance<
-CASES[selectedBattle].price
-){
+
+const index=
+Number(battleSelect.value);
+
+
+const c=
+cases[index];
+
+
+if(state.balance<c.price){
 
 document
 .getElementById("battleResult")
@@ -1406,10 +1635,6 @@ document
 return;
 
 }
-
-
-const c=
-CASES[selectedBattle];
 
 
 state.balance-=c.price;
@@ -1423,32 +1648,34 @@ document.getElementById("reel");
 reel.innerHTML="";
 
 
-for(let i=0;i<28;i++){
+for(let i=0;i<35;i++){
 
-const x=
+const item=
 randomItem(c);
 
-const t=
+
+const tile=
 document.createElement("div");
 
-t.className="tile";
+tile.className="reel-item";
 
 
-t.innerHTML=`
+tile.innerHTML=`
 
-<span>
-${x[2]}
-</span>
+<b>
+${item[2]}
+</b>
 
-${x[0]}
+${item[0]}
 
 <br>
 
-${money(x[1])}
+${money(item[1])}
 
 `;
 
-reel.appendChild(t);
+
+reel.appendChild(tile);
 
 }
 
@@ -1456,88 +1683,92 @@ reel.appendChild(t);
 const player=
 randomItem(c);
 
-const bot=
+const enemy=
 randomItem(c);
 
 
 document
-.getElementById("playerItem")
+.getElementById("myBattleItem")
 .textContent=
-`${player[2]} ${player[0]} · ${money(player[1])}`;
+player[2]+" "+
+player[0]+" "+
+money(player[1]);
 
 
 document
-.getElementById("botItem")
+.getElementById("enemyBattleItem")
 .textContent=
-`${bot[2]} ${bot[0]} · ${money(bot[1])}`;
+enemy[2]+" "+
+enemy[0]+" "+
+money(enemy[1]);
 
 
 document
 .getElementById("battleResult")
 .textContent=
-"Открываем...";
+"🎰 Открытие...";
 
 
-const btn=
-document.getElementById("startBattle");
+const button=
+document.getElementById("battleButton");
 
-btn.disabled=true;
+button.disabled=true;
 
 
 setTimeout(()=>{
 
 reel.style.transform=
-`translateX(-${Math.floor(
-Math.random()*900+500
-)}px)`;
+"translateX(-"+
+(
+500+
+Math.floor(Math.random()*700)
+)+
+"px)";
 
-},40);
+},50);
 
 
 setTimeout(()=>{
 
-let result;
+if(player[1]>enemy[1]){
 
+const reward=
+player[1]+enemy[1];
 
-if(player[1]>bot[1]){
-
-result="Ты выиграл!";
-
-state.balance+=
-player[1]+bot[1];
-
-}
-
-else if(player[1]<bot[1]){
-
-result="Бот выиграл";
-
-}
-
-else{
-
-result="Ничья";
-
-state.balance+=
-player[1];
-
-}
+state.balance+=reward;
 
 
 document
 .getElementById("battleResult")
 .textContent=
-result+
-(
-result==="Ты выиграл!"
-?
-" +"+money(player[1]+bot[1])
-:
-""
-);
+"🏆 ПОБЕДА! +"+
+money(reward);
+
+}
+
+else if(player[1]<enemy[1]){
+
+document
+.getElementById("battleResult")
+.textContent=
+"🤖 Победил Rival";
+
+}
+
+else{
+
+state.balance+=player[1];
 
 
-btn.disabled=false;
+document
+.getElementById("battleResult")
+.textContent=
+"⚖️ Ничья";
+
+}
+
+
+button.disabled=false;
 
 save();
 
@@ -1548,83 +1779,9 @@ updateBalance();
 };
 
 
-
-document
-.getElementById("doUpgrade")
-.onclick=()=>{
-
-if(upgradeIndex===null)
-return;
-
-
-const x=
-state.inventory[upgradeIndex];
-
-
-const chance=
-Math.min(
-95,
-Math.max(
-10,
-55+Math.round(x.value/100)
-)
-);
-
-
-if(Math.random()*100<chance){
-
-state.balance+=
-x.value*2;
-
-alert(
-"Upgrade успешен! +"+
-money(x.value*2)
-);
-
-}
-
-else{
-
-alert(
-"Неудача. Предмет сгорел."
-);
-
-}
-
-
-state.inventory.splice(
-upgradeIndex,
-1
-);
-
-
-upgradeIndex=null;
-
-
-document
-.getElementById("upgradeFrom")
-.textContent=
-"Выбери предмет в инвентаре";
-
-
-document
-.getElementById("chance")
-.textContent="—";
-
-
-document
-.getElementById("doUpgrade")
-.disabled=true;
-
-
-save();
-
-updateBalance();
-
-renderInventory();
-
-};
-
+/* =========================
+   ПОПОЛНЕНИЕ
+========================= */
 
 
 const modal=
@@ -1632,25 +1789,31 @@ document.getElementById("modal");
 
 
 document
-.getElementById("deposit")
-.onclick=() =>
+.getElementById("openDeposit")
+.onclick=()=>{
+
 modal.classList.add("show");
 
+};
+
 
 document
-.getElementById("close")
-.onclick=() =>
+.getElementById("closeModal")
+.onclick=()=>{
+
 modal.classList.remove("show");
 
+};
+
 
 document
-.querySelectorAll("[data-add]")
-.forEach(b=>{
+.querySelectorAll(".deposit-option")
+.forEach(button=>{
 
-b.onclick=()=>{
+button.onclick=()=>{
 
 state.balance+=
-+b.dataset.add;
+Number(button.dataset.money);
 
 save();
 
@@ -1663,13 +1826,18 @@ modal.classList.remove("show");
 });
 
 
+/* =========================
+   СБРОС
+========================= */
+
+
 document
 .getElementById("reset")
 .onclick=()=>{
 
 if(
 confirm(
-"Сбросить баланс и инвентарь?"
+"Сбросить аккаунт?"
 )
 ){
 
@@ -1687,6 +1855,11 @@ renderInventory();
 }
 
 };
+
+
+/* =========================
+   START
+========================= */
 
 
 renderCases();
