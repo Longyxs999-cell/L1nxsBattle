@@ -1,0 +1,178 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L1NXSUPGRADE v4.0</title><style>body{margin:0;background:#070812;color:#fff;font-family:Arial,sans-serif}header{padding:16px;background:#0d1020;display:flex;justify-content:space-between;position:sticky;top:0}.logo{font-size:22px;font-weight:900}.logo span{color:#a83cff}.wrap{max-width:1200px;margin:auto;padding:18px}.nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}button{border:0;border-radius:9px;padding:11px 15px;background:#7728e8;color:white;font-weight:700}button.dark{background:#171b30}.hero,.panel,.card{background:#0e1222;border:1px solid #292e4d;border-radius:15px;padding:16px;margin-bottom:16px}.hero{background:linear-gradient(110deg,#27104e,#10162d)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}.skin{height:115px;background:radial-gradient(circle,#4b237d,#111326);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:62px}.name{font-weight:800;margin-top:9px}.price{color:#ffd25c;font-weight:900;margin:8px 0}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.stat{background:#11152a;padding:16px;border-radius:12px}.stat b{display:block;font-size:25px;margin-top:6px}.modal{display:none;position:fixed;inset:0;background:#000c;align-items:center;justify-content:center;padding:16px}.modal.show{display:flex}.box{background:#0d1122;border:1px solid #6431a0;border-radius:16px;padding:20px;width:min(600px,100%)}input,select{background:#090c18;color:#fff;border:1px solid #343b60;border-radius:9px;padding:11px;width:100%;box-sizing:border-box;margin:6px 0}.reel{display:flex;gap:8px;overflow:hidden;padding:12px;background:#070914;border-radius:12px}.item{min-width:110px;background:#151a2e;border-radius:9px;padding:8px;text-align:center}.mobile{display:none}@media(max-width:700px){.stats{grid-template-columns:repeat(2,1fr)}header .nav{display:none}.mobile{display:flex;position:fixed;bottom:0;left:0;right:0;background:#080a15;padding:8px;justify-content:space-around;z-index:20}.wrap{padding-bottom:75px}}.auth-user{display:flex;align-items:center;gap:8px;margin-left:10px}.user-badge{background:#171b30;padding:8px 10px;border-radius:9px}.logout{background:#3a183f}.auth-tabs{display:flex;gap:8px;margin-bottom:12px}.auth-tabs button{flex:1}.auth-tabs .active{background:#a83cff}
+/* 3D CASE BATTLE VISUAL UPGRADE */
+:root{--neon:#a83cff;--cyan:#38e7ff;--gold:#ffd25c}
+body{background:radial-gradient(ellipse at 50% -15%,#25204d 0,#090a16 48%,#05060c 100%);background-attachment:fixed}
+header{z-index:10;backdrop-filter:blur(18px);background:#0b0d1de8;border-bottom:1px solid #28234b;box-shadow:0 8px 35px #0008}
+.logo{letter-spacing:.4px;text-shadow:0 0 22px #a83cff88}
+button{cursor:pointer;transition:transform .18s,filter .18s,box-shadow .18s;box-shadow:0 4px 0 #35106e,0 8px 20px #5b20a333}
+button:hover{filter:brightness(1.18);transform:translateY(-2px);box-shadow:0 6px 0 #35106e,0 12px 28px #8c35ff55}
+button:active{transform:translateY(2px);box-shadow:0 1px 0 #35106e}
+.hero,.panel,.card{position:relative;overflow:hidden;background:linear-gradient(145deg,#151a32,#0b0d1b 75%);border:1px solid #34345f;box-shadow:0 18px 45px #0005,inset 0 1px #ffffff0a}
+.hero:before,.panel:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,#a83cff12,transparent 40%,#38e7ff08)}
+.grid{perspective:1000px}
+.card{transform-style:preserve-3d;transition:transform .28s,border-color .28s,box-shadow .28s}
+.card:hover{transform:translateY(-7px) rotateX(3deg) rotateY(-2deg);border-color:#9a58ff;box-shadow:0 25px 50px #0008,0 0 24px #8c35ff25}
+.skin{height:145px;position:relative;overflow:hidden;isolation:isolate;background:radial-gradient(ellipse at 50% 35%,#5c369c,#1b1c3b 45%,#090b17 100%);border:1px solid #ffffff12;box-shadow:inset 0 0 35px #0008;transform-style:preserve-3d}
+.skin:before{content:"";position:absolute;width:75%;height:45%;left:12%;top:24%;border-radius:50%;background:#a83cff45;filter:blur(24px);transform:translateZ(-15px)}
+.skin:after{content:"";position:absolute;inset:-80% -30%;background:linear-gradient(110deg,transparent 40%,#ffffff20 48%,transparent 56%);transform:translateX(-70%) rotate(12deg);animation:skinShine 5s ease-in-out infinite}
+.skin{font-size:68px;text-shadow:0 8px 0 #0008,0 0 22px #c99aff88}
+@keyframes skinShine{0%,55%{transform:translateX(-70%) rotate(12deg)}85%,100%{transform:translateX(70%) rotate(12deg)}}
+.price{color:var(--gold);text-shadow:0 0 15px #ffd25c22}
+.stat{border:1px solid #ffffff0d;background:linear-gradient(145deg,#171b34,#0c0e1d);box-shadow:inset 0 1px #ffffff08}
+.modal{backdrop-filter:blur(12px);z-index:50}
+.box{box-shadow:0 25px 100px #000b,0 0 55px #7e32ff22;max-height:90vh;overflow:auto}
+.reel-wrap{position:relative;overflow:hidden;border:1px solid #45416f;border-radius:13px;background:#060711;box-shadow:inset 0 0 30px #000}
+.reel-wrap:before{content:"";position:absolute;z-index:3;left:50%;top:0;bottom:0;width:3px;background:linear-gradient(#fff,#b65cff,#fff);box-shadow:0 0 16px #b65cff;transform:translateX(-50%)}
+.reel{display:flex;gap:10px;overflow:hidden;padding:14px 0;border-radius:0;scroll-behavior:auto;will-change:transform;transform:translateX(0)}
+.item{box-sizing:border-box;flex:0 0 126px;min-width:126px;height:132px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1px solid #ffffff12;background:linear-gradient(145deg,#202542,#101323);box-shadow:inset 0 1px #ffffff10;white-space:normal;font-size:12px}
+.item .item-icon{font-size:38px;filter:drop-shadow(0 7px 5px #0009)}
+.item.winner{border-color:#ffd25c;background:linear-gradient(145deg,#55421e,#211a13);box-shadow:0 0 28px #ffd25c44,inset 0 0 20px #ffd25c12}
+.reel-label{color:#aaaed0;font-size:12px;text-align:center;margin:8px 0}
+.case-3d{height:150px;display:grid;place-items:center;perspective:700px;margin:8px 0 16px}
+.case-cube{width:105px;height:105px;position:relative;transform-style:preserve-3d;animation:caseFloat 3s ease-in-out infinite}
+.case-cube .face{position:absolute;inset:0;display:grid;place-items:center;border:1px solid #d5aaff88;background:linear-gradient(145deg,#7138b5,#241044);box-shadow:inset 0 0 25px #fff2,0 0 25px #9a40ff33;font-size:48px}
+.case-cube .front{transform:translateZ(52px)}.case-cube .back{transform:rotateY(180deg) translateZ(52px)}.case-cube .right{transform:rotateY(90deg) translateZ(52px)}.case-cube .left{transform:rotateY(-90deg) translateZ(52px)}.case-cube .top{transform:rotateX(90deg) translateZ(52px)}.case-cube .bottom{transform:rotateX(-90deg) translateZ(52px)}
+@keyframes caseFloat{0%,100%{transform:rotateX(-12deg) rotateY(-22deg) translateY(0)}50%{transform:rotateX(8deg) rotateY(22deg) translateY(-8px)}}
+.upgrade-stage{margin:18px 0;padding:22px 12px;border:1px solid #39345f;border-radius:14px;background:radial-gradient(ellipse,#21183e,#080a15 70%);text-align:center}
+.upgrade-orb{width:110px;height:110px;margin:8px auto 15px;border-radius:50%;display:grid;place-items:center;font-size:42px;border:2px solid #8f4dff;background:radial-gradient(circle at 35% 25%,#8e58ff,#211044 65%,#080711);box-shadow:0 0 25px #8f4dff55,inset 0 0 25px #fff2}
+.upgrade-orb.spinning{animation:orbSpin 1s linear infinite,orbPulse .5s ease-in-out infinite alternate}
+.upgrade-orb.win{border-color:#ffd25c;box-shadow:0 0 45px #ffd25c88}
+.upgrade-orb.fail{filter:grayscale(1);opacity:.65}
+@keyframes orbSpin{to{transform:rotate(360deg)}}@keyframes orbPulse{to{box-shadow:0 0 55px #a83cffaa,inset 0 0 30px #fff4}}
+.meter{height:8px;border-radius:9px;background:#25213b;overflow:hidden;margin:14px 0}.meter span{display:block;height:100%;width:0;background:linear-gradient(90deg,#a83cff,#38e7ff);transition:width 1.8s cubic-bezier(.1,.8,.2,1)}
+@media(max-width:700px){.skin{height:120px}.item{flex-basis:100px;min-width:100px}.case-cube{transform:scale(.85)}}
+
+</style></head><body><div class="modal show" id="authModal"><div class="box" style="max-width:430px"><h2 id="authTitle">🔐 Вход</h2><div class="auth-tabs"><button id="loginTab" class="active" onclick="setAuthMode('login')">Войти</button><button id="registerTab" class="dark" onclick="setAuthMode('register')">Регистрация</button></div><input id="authLogin" placeholder="Логин"><input id="authPassword" type="password" placeholder="Пароль"><input id="authPassword2" type="password" placeholder="Повторите пароль" style="display:none"><button id="authBtn" style="width:100%;margin-top:8px" onclick="authSubmit()">Войти</button><p id="authMsg" style="color:#ff8080"></p></div></div><header><div class="logo">L1NXS<span>UPGRADE</span> <small>v4.0</small></div><div>Баланс: <b id="bal">5000 ₽</b> <button onclick="topup()">Пополнить</button><span class="auth-user"><span class="user-badge" id="userBadge"></span><button class="logout" onclick="logout()">Выйти</button></span></div></header><div class="wrap"><div class="nav"><button onclick="page('cases')">🎁 Кейсы</button><button onclick="page('shop')">🛒 Магазин</button><button onclick="page('upgrade')">⚡ Upgrade</button><button onclick="page('inv')">🎒 Инвентарь</button><button onclick="page('account')">👤 Аккаунт</button></div><main id="main"></main></div><div class="mobile"><button onclick="page('cases')">🎁</button><button onclick="page('shop')">🛒</button><button onclick="page('upgrade')">⚡</button><button onclick="page('inv')">🎒</button><button onclick="page('account')">👤</button></div><div class="modal" id="modal"><div class="box" id="box"></div></div><script>
+const KEY='L1NXSUPGRADE_V4',CODE='L1nxsBog',USERS='L1NXSUPGRADE_USERS',SESSION='L1NXSUPGRADE_SESSION';const users=JSON.parse(localStorage.getItem(USERS)||'{}');let currentUser=localStorage.getItem(SESSION);let s=currentUser&&users[currentUser]?users[currentUser].data:{balance:5000,inventory:[],cases:0,upgrades:0,max:0};let authMode='login';const F=n=>Math.round(n).toLocaleString('ru-RU')+' ₽';
+const skins=[['Karambit | Doppler','🔪',78450],['Butterfly Knife | Fade','🔪',62300],['M9 Bayonet | Crimson Web','🔪',48200],['Bayonet | Marble Fade','🔪',55700],['Flip Knife | Lore','🔪',42800],['AWP | Dragon Lore','🎯',1250000],['AK-47 | Fire Serpent','🔫',36000],['M4A4 | Howl','🔫',480000],['AK-47 | Redline','🔫',2850],['AK-47 | Vulcan','🔫',3250],['AWP | Asiimov','🎯',4750],['M4A1-S | Hyper Beast','🔫',2980],['Glock-18 | Fade','🔫',12300],['USP-S | Kill Confirmed','🔫',2450],['Desert Eagle | Printstream','🔫',3990],['P250 | See Ya Later','🔫',1120],['FAMAS | Commemoration','🔫',1890],['MP9 | Starlight Protector','🔫',980],['MAC-10 | Neon Rider','🔫',2650],['P90 | Asiimov','🔫',1750],['SSG 08 | Dragonfire','🎯',1980],['Gloves | Pandora’s Box','🧤',420000],['Gloves | Vice','🧤',215000]];
+const cases=[['Starter Case',29,'🎁'],['Daily Case',49,'📦'],['Neon Case',79,'🟣'],['Cyber Case',159,'🤖'],['Inferno Case',249,'🔥'],['Knife Rush',449,'🔪'],['Gold Case',599,'👑'],['Royal Case',799,'💎'],['Dragon Case',899,'🐉'],['Galaxy Case',1199,'🌌'],['Quantum Case',1499,'🌀'],['Omega Case',1799,'Ω'],['Eclipse Case',2199,'🌘'],['Titan Case',2499,'🗿'],['Blackout Case',2999,'⬛'],['Diamond Case',3499,'💠'],['Imperial Case',3999,'🏰'],['Crown Case',4999,'👑'],['Ultra Case',5999,'🚀'],['Mythic Case',7499,'✨'],['Legend Case',9999,'🔥'],['Infinity Case',14999,'♾️'],['Founder Case',19999,'⭐']];
+const casePools={
+  0:[[8,.78],[9,.10],[10,.06],[11,.04],[12,.02]],
+  1:[[8,.70],[9,.12],[10,.08],[11,.06],[12,.04]],
+  2:[[8,.55],[9,.18],[10,.10],[11,.08],[12,.05],[0,.02],[1,.02]],
+  3:[[8,.48],[9,.20],[10,.10],[11,.08],[12,.06],[2,.03],[3,.02],[4,.02],[6,.01]],
+  4:[[9,.35],[10,.20],[11,.15],[12,.10],[6,.08],[2,.04],[3,.03],[4,.03],[0,.01],[1,.01]],
+  5:[[9,.28],[10,.20],[11,.16],[12,.12],[6,.08],[2,.05],[3,.04],[4,.04],[0,.015],[1,.015]],
+  6:[[10,.25],[11,.20],[12,.15],[6,.12],[2,.08],[3,.06],[4,.05],[0,.03],[1,.03],[5,.03]],
+  7:[[10,.22],[11,.18],[12,.14],[6,.12],[2,.09],[3,.07],[4,.06],[0,.04],[1,.04],[5,.04]],
+  8:[[10,.20],[11,.17],[12,.14],[6,.13],[2,.10],[3,.08],[4,.07],[0,.04],[1,.04],[5,.03]],
+  9:[[10,.18],[11,.16],[12,.14],[6,.14],[2,.10],[3,.08],[4,.07],[0,.05],[1,.04],[5,.04]],
+  10:[[10,.17],[11,.15],[12,.14],[6,.14],[2,.10],[3,.09],[4,.07],[0,.05],[1,.04],[5,.05]],
+  11:[[10,.16],[11,.15],[12,.14],[6,.14],[2,.10],[3,.09],[4,.08],[0,.05],[1,.04],[5,.05]],
+  12:[[10,.15],[11,.14],[12,.14],[6,.14],[2,.10],[3,.10],[4,.08],[0,.05],[1,.04],[5,.06]],
+  13:[[10,.14],[11,.14],[12,.14],[6,.14],[2,.11],[3,.10],[4,.08],[0,.06],[1,.04],[5,.05]],
+  14:[[10,.13],[11,.13],[12,.13],[6,.14],[2,.12],[3,.11],[4,.09],[0,.06],[1,.04],[5,.05]],
+  15:[[10,.12],[11,.12],[12,.12],[6,.14],[2,.13],[3,.12],[4,.10],[0,.07],[1,.04],[5,.04]],
+  16:[[10,.11],[11,.11],[12,.11],[6,.14],[2,.14],[3,.13],[4,.11],[0,.07],[1,.04],[5,.04]],
+  17:[[10,.10],[11,.10],[12,.10],[6,.14],[2,.15],[3,.14],[4,.12],[0,.08],[1,.04],[5,.03]],
+  18:[[10,.09],[11,.09],[12,.09],[6,.14],[2,.16],[3,.15],[4,.13],[0,.09],[1,.04],[5,.02]],
+  19:[[10,.08],[11,.08],[12,.08],[6,.14],[2,.17],[3,.16],[4,.14],[0,.10],[1,.04],[5,.01]],
+  20:[[10,.07],[11,.07],[12,.07],[6,.14],[2,.18],[3,.17],[4,.15],[0,.11],[1,.04],[5,.00]],
+  21:[[10,.06],[11,.06],[12,.06],[6,.14],[2,.19],[3,.18],[4,.16],[0,.11],[1,.04],[5,.00]],
+  22:[[10,.05],[11,.05],[12,.05],[6,.14],[2,.20],[3,.19],[4,.17],[0,.11],[1,.04],[5,.00]]
+};
+function pickCaseSkin(caseIndex){
+  const pool=casePools[caseIndex]||casePools[0];
+  let r=Math.random(),sum=0;
+  for(const [idx,weight] of pool){sum+=weight;if(r<sum)return skins[idx]}
+  return skins[pool[pool.length-1][0]];
+}
+function save(){if(currentUser){users[currentUser].data=s;localStorage.setItem(USERS,JSON.stringify(users));localStorage.setItem(SESSION,currentUser)}document.getElementById('bal').textContent=F(s.balance);document.getElementById('userBadge').textContent='👤 '+currentUser}
+function card(x,buy=true){return `<div class="card" style="--rarity:${x[2]>=100000?'#ffb84d':x[2]>=20000?'#c17aff':x[2]>=5000?'#55dfff':'#737dff'}"><div class="skin" style="border-bottom:2px solid var(--rarity);box-shadow:inset 0 -15px 35px color-mix(in srgb,var(--rarity) 18%,transparent)">${x[1]}</div><div class="name">${x[0]}</div><div class="price">${F(x[2])}</div>${buy?`<button onclick="buy('${encodeURIComponent(x[0])}')">Купить</button>`:''}</div>`}
+function page(x){let m=document.getElementById('main');if(x==='shop')m.innerHTML=`<div class="panel"><h2>🛒 Магазин</h2><input id="q" placeholder="Поиск скина"><div class="grid" id="g">${skins.map(card).join('')}</div></div>`;else if(x==='inv')m.innerHTML=`<div class="panel"><h2>🎒 Инвентарь</h2>${s.inventory.length?'<div class="grid">'+s.inventory.map((x,i)=>card(x,false)+`<button onclick="upgrade(${i})">В Upgrade</button>`).join('')+'</div>':'<p>Инвентарь пуст.</p>'}`;else if(x==='upgrade')m.innerHTML=`<div class="panel"><h2>⚡ Upgrade</h2>
+<p>Выбери предмет из инвентаря и цель. Шанс рассчитывается от соотношения стоимости.</p>
+<div class="grid">
+<div><h3>Твой предмет</h3><select id="upFrom" onchange="updateUpgradeChance()"><option value="">Выбери скин</option>${s.inventory.map((x,i)=>`<option value="${i}">${x[0]} — ${F(x[2])}</option>`).join('')}</select></div>
+<div><h3>Цель</h3><select id="upTo" onchange="updateUpgradeChance()"><option value="">Выбери цель</option>${skins.map((x,i)=>`<option value="${i}">${x[0]} — ${F(x[2])}</option>`).join('')}</select></div>
+</div>
+<div class="stat" style="margin:14px 0">Шанс успеха: <b id="upChance">0%</b><small id="upInfo"></small></div>
+<button onclick="doUpgrade()">⚡ Апгрейд</button>
+</div>`;else if(x==='account')m.innerHTML=`<div class="panel"><h2>👤 Аккаунт</h2><div class="stats"><div class="stat">Баланс<b>${F(s.balance)}</b></div><div class="stat">Кейсов открыто<b>${s.cases}</b></div><div class="stat">Апгрейдов<b>${s.upgrades}</b></div><div class="stat">Максимальный выигрыш<b>${F(s.max)}</b></div></div></div>`;else m.innerHTML=`<div class="hero"><h1>🎁 L1NXSUPGRADE</h1><p>Кейсы, магазин скинов, Upgrade и инвентарь.</p></div><div class="grid">${cases.map((c,i)=>`<div class="card"><div class="case-3d"><div class="case-cube"><div class="face front">${c[2]}</div><div class="face back">${c[2]}</div><div class="face right">✦</div><div class="face left">✦</div><div class="face top">★</div><div class="face bottom">✦</div></div></div><div class="name">${c[0]}</div><div class="price">${F(c[1])}</div><button onclick="openCase(${i})">Открыть кейс</button></div>`).join('')}</div>`;save()}
+function buy(n){let x=skins.find(a=>a[0]===decodeURIComponent(n));if(!x)return;if(s.balance<x[2])return alert('Недостаточно виртуальных ₽');s.balance-=x[2];s.inventory.push([...x]);save();page('inv')}
+function openCase(i){
+  const c=cases[i];
+  if(s.balance<c[1])return alert('Недостаточно виртуальных ₽');
+  s.balance-=c[1];s.cases++;
+  const win=pickCaseSkin(i);
+  s.max=Math.max(s.max,win[2]);save();
+  const reelItems=Array.from({length: forty()},()=>skins[Math.floor(Math.random()*skins.length)]);
+  reelItems[30]=win;
+  document.getElementById('box').innerHTML=`<h2>${c[2]} ${c[0]}</h2>
+    <div class="case-3d"><div class="case-cube" style="animation-duration:1.8s"><div class="face front">${c[2]}</div><div class="face back">${c[2]}</div><div class="face right">✦</div><div class="face left">✦</div><div class="face top">★</div><div class="face bottom">✦</div></div></div>
+    <div class="reel-label">ОПРЕДЕЛЯЕМ ВЫПАВШИЙ ПРЕДМЕТ…</div>
+    <div class="reel-wrap"><div class="reel" id="reel">${reelItems.map((x,j)=>`<div class="item ${j===30?'winner':''}"><span class="item-icon">${x[1]}</span><span>${x[0]}</span><b>${F(x[2])}</b></div>`).join('')}</div></div>
+    <p id="caseResult" class="reel-label">Прокрутка кейса</p><button id="caseTake" disabled style="width:100%;opacity:.45">Открываем…</button>`;
+  document.getElementById('modal').classList.add('show');
+  const reel=document.getElementById('reel');
+  const itemWidth=136, target=30*itemWidth-(reel.parentElement.clientWidth/2-itemWidth/2);
+  reel.style.transition='none';reel.style.transform='translateX(0)';
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    reel.style.transition='transform 6.2s cubic-bezier(.08,.72,.08,1)';
+    reel.style.transform=`translateX(-${Math.max(0,target)}px)`;
+  }));
+  setTimeout(()=>{
+    const result=document.getElementById('caseResult'),btn=document.getElementById('caseTake');
+    if(result)result.innerHTML=`<b style="color:#ffd25c">ВЫПАЛО: ${win[0]} — ${F(win[2])}</b>`;
+    if(btn){btn.disabled=false;btn.style.opacity='1';btn.textContent='Забрать предмет';btn.onclick=()=>finishCase(win)}
+  },6500);
+}
+function forty(){return 40}
+function finishCase(x){s.inventory.push([...x]);save();document.getElementById('modal').classList.remove('show');page('inv')}
+function calcUpgradeChance(fromValue,targetValue){
+  if(!fromValue||!targetValue||targetValue<=fromValue)return targetValue>0?80:0;
+  // Модель с известным процентом: 80% отдачи, как у опубликованного симулятора Case-Battle.
+  // Чем выше множитель цели, тем ниже шанс.
+  let chance=(fromValue/targetValue)*80;
+  return Math.max(1,Math.min(80,chance));
+}
+function updateUpgradeChance(){
+  const a=document.getElementById('upFrom'),b=document.getElementById('upTo');
+  if(!a||!b)return;
+  const chanceEl=document.getElementById('upChance'),info=document.getElementById('upInfo');
+  if(a.value===''||b.value===''){chanceEl.textContent='0%';info.textContent='';return}
+  const from=s.inventory[Number(a.value)],to=skins[Number(b.value)];
+  const chance=calcUpgradeChance(from[2],to[2]);
+  chanceEl.textContent=chance.toFixed(2)+'%';
+  info.textContent='  Множитель: x'+(to[2]/from[2]).toFixed(2);
+}
+function doUpgrade(){
+  const a=document.getElementById('upFrom'),b=document.getElementById('upTo');
+  if(!a||!b||a.value===''||b.value==='')return alert('Выбери предмет и цель');
+  const i=Number(a.value),target=skins[Number(b.value)],from=s.inventory[i];
+  if(!from)return alert('Предмет не найден');
+  const chance=calcUpgradeChance(from[2],target[2]),success=Math.random()*100<chance;
+  const modal=document.getElementById('modal'),box=document.getElementById('box');
+  box.innerHTML=`<h2>⚡ Upgrade</h2><div class="upgrade-stage">
+    <div style="color:#aaaed0;font-size:13px">ТВОЙ ПРЕДМЕТ</div>
+    <div style="font-size:48px;margin:8px">${from[1]}</div><b>${from[0]}</b><div class="price">${F(from[2])}</div>
+    <div class="upgrade-orb spinning" id="upgradeOrb">⚡</div>
+    <div class="meter"><span id="upgradeMeter"></span></div>
+    <div style="color:#aaaed0;font-size:13px">ЦЕЛЬ</div><div style="font-size:42px;margin:8px">${target[1]}</div><b>${target[0]}</b><div class="price">${F(target[2])}</div>
+    <p id="upgradeStatus">Шанс успеха: ${chance.toFixed(2)}% · Проверяем апгрейд…</p>
+  </div><button id="upgradeClose" disabled style="width:100%;opacity:.45">Идёт апгрейд…</button>`;
+  modal.classList.add('show');
+  requestAnimationFrame(()=>{const m=document.getElementById('upgradeMeter');if(m)m.style.width='100%'});
+  setTimeout(()=>{
+    const orb=document.getElementById('upgradeOrb'),status=document.getElementById('upgradeStatus'),btn=document.getElementById('upgradeClose');
+    if(success){
+      s.inventory[i]=[...target];s.max=Math.max(s.max,target[2]);
+      orb.className='upgrade-orb win';orb.textContent='✓';
+      status.innerHTML=`<b style="color:#ffd25c">УСПЕХ! Получен ${target[0]} — ${F(target[2])}</b>`;
+    }else{
+      s.inventory.splice(i,1);
+      orb.className='upgrade-orb fail';orb.textContent='×';
+      status.innerHTML='<b style="color:#ff7373">НЕУДАЧА — предмет потерян</b>';
+    }
+    s.upgrades++;save();
+    btn.disabled=false;btn.style.opacity='1';btn.textContent='Продолжить';
+    btn.onclick=()=>{modal.classList.remove('show');page('upgrade')};
+  },2200);
+}
+function topup(){document.getElementById('box').innerHTML=`<h2>Пополнение виртуального баланса</h2><input id="code" placeholder="Секретный код"><button onclick="unlock()">Проверить</button>`;document.getElementById('modal').classList.add('show')}
+function unlock(){if(document.getElementById('code').value!==CODE)return alert('Неверный код');document.getElementById('box').innerHTML='<h2>Добавить виртуальные ₽</h2>'+[1000,5000,10000,50000,100000].map(v=>`<button style="display:block;margin:8px 0;width:100%" onclick="add(${v})">+ ${F(v)}</button>`).join('')}
+function add(v){s.balance+=v;save();document.getElementById('modal').classList.remove('show')}
+function setAuthMode(m){authMode=m;let r=m==='register';document.getElementById('authTitle').textContent=r?'📝 Регистрация':'🔐 Вход';document.getElementById('authBtn').textContent=r?'Зарегистрироваться':'Войти';document.getElementById('authPassword2').style.display=r?'block':'none';document.getElementById('loginTab').className=r?'dark':'active';document.getElementById('registerTab').className=r?'active':'dark';document.getElementById('authMsg').textContent=''}
+function authSubmit(){let l=document.getElementById('authLogin').value.trim(),p=document.getElementById('authPassword').value,p2=document.getElementById('authPassword2').value,msg=document.getElementById('authMsg');if(!/^[A-Za-z0-9_]{3,20}$/.test(l)){msg.textContent='Логин: 3–20 символов, латиница, цифры и _.';return}if(p.length<6){msg.textContent='Пароль минимум 6 символов.';return}if(authMode==='register'){if(p!==p2){msg.textContent='Пароли не совпадают.';return}if(users[l]){msg.textContent='Такой логин уже существует.';return}users[l]={password:p,data:{balance:5000,inventory:[],cases:0,upgrades:0,max:0}};localStorage.setItem(USERS,JSON.stringify(users))}else if(!users[l]||users[l].password!==p){msg.textContent='Неверный логин или пароль.';return}currentUser=l;s=users[l].data;localStorage.setItem(SESSION,l);save();document.getElementById('authModal').classList.remove('show');page('cases')}
+function logout(){localStorage.removeItem(SESSION);location.reload()}
+document.getElementById('modal').onclick=e=>{if(e.target.id==='modal')e.currentTarget.classList.remove('show')};if(currentUser){document.getElementById('authModal').classList.remove('show');save();page('cases')}else document.getElementById('bal').textContent=F(s.balance);
+</script></body></html>
