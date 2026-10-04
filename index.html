@@ -2293,6 +2293,8 @@ var _upgradeQuickSelection=null;
 
 
 // === NEXUSDROP UPGRADE SETTINGS V36 ===
+var NX_UPGRADE_RETURN_RATE = 0.9;
+var NX_UPGRADE_MAX_CHANCE = 90;
 var NX_UPGRADE_SETTINGS_KEY = 'nexus_upgrade_settings_v1';
 var NX_UPGRADE_DEFAULTS = {mults:[2,4,8], pcts:[35,55,75], sound:true, speed:'normal'};
 var NX_UPGRADE_SETTINGS = null;
@@ -2546,7 +2548,7 @@ function pickPct(pct){
   if(!total){showInfo('Апгрейд','Сначала выберите свои скины.');return false;}
   if(!Number.isFinite(pct)||pct<=0||pct>80){showInfo('Ошибка','Шанс должен быть больше 0% и не больше 80%.');return false;}
   _upgradeQuickSelection={type:'pct',index:(NX_UPGRADE_SETTINGS.pcts||[]).findIndex(function(v){return Math.abs(Number(v)-pct)<0.00001;})};
-  return pickUpgradeTargetByPrice(total/(pct/100));
+  return pickUpgradeTargetByPrice(total*(NX_UPGRADE_RETURN_RATE/(pct/100)));
 }
 function clearUpgradeSources(){
   nxDismissUpgradeResult();
@@ -2639,13 +2641,13 @@ function updateUpgradePreview(){
     else tBox.innerHTML='<div class="up12-placeholder-icon up12-target-glyph"></div><div class="up12-preview-name">Выберите цель для апгрейда</div>';
   }
   if(tMeta)tMeta.innerHTML=target?'<b>'+money(getCatalogPrice(target[0],target[1]))+'</b>'+marketSourceBadge(target[0]):'Из каталога';
-  var mult=0,baseChance=0;if(total&&target){var targetCatalogPrice=getCatalogPrice(target[0],target[1]);mult=targetCatalogPrice/total;baseChance=Math.min(80,100/mult);}
+  var mult=0,baseChance=0;if(total&&target){var targetCatalogPrice=getCatalogPrice(target[0],target[1]);mult=targetCatalogPrice/total;baseChance=Math.min(NX_UPGRADE_MAX_CHANCE,(100/mult)*NX_UPGRADE_RETURN_RATE);}
   var bonus=1;
   var effective=Math.min(100,baseChance*bonus);
   // In the separate recording page the wheel always shows the ordinary
   // displayed chance. The demo server result may still be a guaranteed
   // outcome, but that does not alter the on-screen percentage.
-  if(currentPage !== 'recording' && currentUser&&currentUser.upgradeBoost)effective=Math.min(80,effective+15);
+  if(currentPage !== 'recording' && currentUser&&currentUser.upgradeBoost)effective=Math.min(NX_UPGRADE_MAX_CHANCE,effective+15);
   var pct=document.getElementById('up12Chance'),bar=document.getElementById('up12ChanceBar'),btn=document.getElementById('up12Run');
   if(pct)pct.textContent=nxFormatChance(effective);
   var chanceLabel=document.getElementById('up12ChanceLabel');if(chanceLabel)chanceLabel.textContent=nxChanceLabel(effective);
@@ -2891,22 +2893,22 @@ function nxAnimatePointerTo(target,duration,turns,onDone){
   var perf=window.performance&&performance.now?performance.now.bind(performance):function(){return Date.now();};
   var ms=Math.max(450,Number(duration)||1);
   var start=perf();
-  // VIP-style feel: quick launch, long controlled deceleration, then a clean stop.
-  // The completed frame is kept visible by the result-state lock below; it is
-  // dismissed only when the player starts editing the next upgrade.
-  function easeOutCubic(t){return 1-Math.pow(1-t,3);}
+  // Smoother premium-style landing: fast launch, sustained cruise, then a
+  // longer soft tail. Finalization happens on the exact last animation frame
+  // rather than on a separate timer, which removes the end-of-spin snap/jump.
+  function easeOutQuint(t){return 1-Math.pow(1-t,5);}
   function frame(now){
     var t=Math.max(0,Math.min(1,(now-start)/ms));
-    var e=easeOutCubic(t);
-    var s=distance*e;
+    var e=easeOutQuint(t);
     var prevS=frame._s||0;
     var dt=Math.max(1,now-(frame._last||now));
-    nxPointerSpeed=Math.max(0,(s-prevS)/dt*1000);
-    frame._s=s;frame._last=now;
-    nxPointerAngle=nxNormalizeAngle(from+s);
+    nxPointerSpeed=Math.max(0,(e*distance-prevS)/dt*1000);
+    frame._s=e*distance;frame._last=now;
+    nxPointerAngle=nxNormalizeAngle(from+frame._s);
     nxApplyPointerAngle(nxPointerAngle);
-    if(t<1){nxPointerFrame=requestAnimationFrame(frame);}
-    else{nxPointerFrame=0;nxPointerSpeed=0;nxPointerAngle=targetNorm;nxApplyPointerAngle(targetNorm);if(onDone)onDone();}
+    if(t<1){nxPointerFrame=requestAnimationFrame(frame);return;}
+    nxPointerFrame=0;nxPointerSpeed=0;nxPointerAngle=targetNorm;nxApplyPointerAngle(targetNorm);
+    if(onDone)onDone();
   }
   nxPointerFrame=requestAnimationFrame(frame);
 }
@@ -3094,15 +3096,14 @@ async function doUpgrade(){
   if(nxUpgradePointerIsInWinZone(finalDeg,chancePct)!==success){
     return await nxAbortUpgradeVisual(requestId,stage,btn,status,'Сервер вернул несовместимые данные результата. Операция остановлена без повторного списания.');
   }
-  var duration=NX_UPGRADE_SETTINGS&&NX_UPGRADE_SETTINGS.speed==='fast'?2050:3400;
-  var finalTurns=NX_UPGRADE_SETTINGS&&NX_UPGRADE_SETTINGS.speed==='fast'?2.7:4.1;
+  var duration=NX_UPGRADE_SETTINGS&&NX_UPGRADE_SETTINGS.speed==='fast'?1750:2800;
+  var finalTurns=NX_UPGRADE_SETTINGS&&NX_UPGRADE_SETTINGS.speed==='fast'?2.2:3.4;
   if(stage)stage.classList.remove('nx-upgrade-pointer-spinning');
   if(status){status.className='nx-upgrade-inline-status show';status.textContent='Результат получен. Показываем исход…';}
   nxStopPointerLoop();
   nxStopUpgradeSpinSound();
   nxStartUpgradeSpinSound(duration);
-  nxAnimatePointerTo(finalDeg,duration,finalTurns,function(){if(_activeUpgrade!==requestId)return;});
-  setTimeout(function(){
+  nxAnimatePointerTo(finalDeg,duration,finalTurns,function(){
     if(_activeUpgrade!==requestId)return;
     nxStopUpgradeSpinSound();nxPrimeUpgradeAudio();nxPlayUpgradeResultSound(success);if(success)nxShowUpgradeWinFx();
     if(pointer){nxSetUpgradePointerAngle(finalDeg,true);pointer.classList.add(success?'result-win':'result-lose');}
@@ -3110,17 +3111,13 @@ async function doUpgrade(){
     if(btn){btn.disabled=true;btn.textContent=success?'УСПЕХ':'ГОТОВО';}
     if(status){status.className='nx-upgrade-inline-status show '+(success?'win':'lose');status.innerHTML='<b>'+(success?'УСПЕХ':'НЕУДАЧА')+'</b>'+(success?'Выдан <strong>'+safeSkinLabel(serverTarget.name)+'</strong> · '+money(serverTarget.price):'Исходные предметы списаны. Новый предмет не выдан.');}
     try{if(navigator.vibrate)navigator.vibrate(success?[45,30,80]:[35,25,55]);}catch(e){}
-    // Lock the completed result in place. The previous implementation cleared
-    // the preview after a fixed timeout, producing the visible "55% -> 0%"
-    // snap at the very last frame. The result now stays rendered until the
-    // player edits the next upgrade, exactly like a premium upgrader flow.
     nxUpgradeResultVisible=true;
     _activeUpgrade=null;
     _upgradeSelectedIds=[];selectedUpgrade=null;upgradeTargetName='';upgradeTargetPrice=0;_upgradeQuickSelection=null;
     renderUpgradeSourceList();renderUpgradeTargetCatalog();
     if(btn){btn.disabled=true;btn.textContent='НОВАЯ СТАВКА';}
     nxInitUpgradeCaptcha();
-  },duration+80);
+  });
   return false;
 }
 function closeUpgradeView(){var wasRecordingPage=currentPage==='recording';nxDismissUpgradeResult();_activeUpgrade=null;var fx=document.querySelector('.nx-upgrade-win-fx');if(fx)fx.remove();document.querySelectorAll('.up12-preview-card.nx-target-win').forEach(function(x){x.classList.remove('nx-target-win');});nxStopPointerLoop();nxStopPointerAnimation();nxStopUpgradeSpinSound();var stage=document.querySelector('.up12-machine-top');if(stage){stage.classList.remove('nx-upgrade-pointer-spinning');stage.classList.remove('nx-upgrade-resetting');}var btn=document.getElementById('up12Run');if(btn){btn.disabled=false;btn.textContent='ЗАПУСТИТЬ АПГРЕЙД';}var pointer=document.getElementById('up12Pointer');if(pointer){pointer.classList.remove('result-win','result-lose');nxSetUpgradePointerAngle(0,true);}closeModal('genericModal');if(wasRecordingPage)go('recording');return false;}
