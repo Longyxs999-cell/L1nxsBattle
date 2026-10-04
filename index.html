@@ -2868,15 +2868,16 @@ function nxStartPointerLoop(){
   var perf=window.performance&&performance.now?performance.now.bind(performance):function(){return Date.now();};
   var started=perf(),last=started;
   var cruiseSpeed=upgradeQuickMode?330:165;
-  var accelMs=upgradeQuickMode?220:560;
+  var accelMs=upgradeQuickMode?520:900;
   nxPointerLoopLast=started;
+  function smoothStep5(t){t=Math.max(0,Math.min(1,t));return t*t*t*(t*(t*6-15)+10);}
   function frame(now){
     if(!_activeUpgrade){nxStopPointerLoop();return;}
     var dt=Math.max(0,Math.min(34,now-last));last=now;nxPointerLoopLast=now;
     var age=now-started;
     var ramp=Math.min(1,age/accelMs);
-    var eased=ramp*ramp*(3-2*ramp);
-    var speed=cruiseSpeed*(0.28+0.72*eased);
+    var eased=smoothStep5(ramp);
+    var speed=cruiseSpeed*(0.16+0.84*eased);
     nxPointerSpeed=speed;
     var current=Number(nxPointerAngle);if(!Number.isFinite(current))current=0;
     nxPointerAngle=nxNormalizeAngle(current+speed*dt/1000);
@@ -2888,66 +2889,124 @@ function nxStartPointerLoop(){
 function nxNormalizeAngle(a){var n=Number(a);if(!Number.isFinite(n))n=0;n=n%360;if(n<0)n+=360;return n;}
 function nxAnimatePointerTo(target,duration,turns,onDone){
   var el=nxPointerOrbit();if(!el){if(onDone)onDone();return;}
-  nxStopPointerLoop();nxStopPointerAnimation();
+
+  /*
+   * Continuous handoff from the live wheel:
+   * 1) capture the live angular velocity before stopping the live RAF;
+   * 2) keep that exact velocity through a short cruise;
+   * 3) smoothly brake to zero;
+   * 4) land on the authoritative target.
+   *
+   * Unlike the old distance-based easeOut, this never starts a second
+   * animation with a large initial velocity. It also keeps the visual clock
+   * monotonic if a mobile browser drops a RAF frame.
+   */
+  var handoffSpeed=Math.max(0,Number(nxPointerSpeed)||0);
   var from=Number(nxPointerAngle);if(!Number.isFinite(from))from=0;
+  from=nxNormalizeAngle(from);
   var targetNorm=nxNormalizeAngle(target);
-  var delta=targetNorm-nxNormalizeAngle(from);if(delta<0)delta+=360;
-  var extraTurns=Math.max(1.8,Number(turns)||0);
-  var distance=delta+extraTurns*360;
+  var forwardDelta=targetNorm-from;if(forwardDelta<0)forwardDelta+=360;
+
+  /*
+   * The live loop has already supplied the long spin. Keep only a controlled
+   * finishing turn count here, so the final section cannot accelerate hard.
+   */
+  var requestedTurns=Math.max(0.45,Number(turns)||0.65);
+  requestedTurns=Math.min(upgradeQuickMode?0.55:0.70,requestedTurns);
+  var distance=forwardDelta+requestedTurns*360;
+
+  var cruiseSpeed=upgradeQuickMode?330:165;
+  var v0=handoffSpeed;
+  if(v0<36)v0=cruiseSpeed*0.22;
+  v0=Math.min(v0,cruiseSpeed);
+
+  var requestedMs=Math.max(1400,Number(duration)||1);
+  /*
+   * Choose a brake time that makes the physical path as close as possible to
+   * the requested duration, while preserving the handoff velocity and exact
+   * travel distance. If those constraints are incompatible, prefer smoothness
+   * and extend the animation rather than accelerating.
+   */
+  var travelAtV0Ms=v0>0?(distance/v0)*1000:requestedMs;
+  var brakeCandidate=requestedMs-travelAtV0Ms;
+  var brakeMs=upgradeQuickMode?950:1450;
+  /* For v(t)=v0*(1-smoothStep5(t)), brake distance is v0*brakeMs/2. */
+  var desiredBrakeMs=2*Math.max(0,brakeCandidate);
+  if(Number.isFinite(desiredBrakeMs) && desiredBrakeMs>0){
+    var minBrake=upgradeQuickMode?800:1100;
+    var maxBrake=upgradeQuickMode?1500:2400;
+    brakeMs=Math.max(minBrake,Math.min(maxBrake,desiredBrakeMs));
+  }
+  var brakeSeconds=brakeMs/1000;
+  var brakeDistance=v0*brakeSeconds*0.5;
+  if(brakeDistance>distance){
+    brakeDistance=distance;
+    brakeMs=v0>0?(2*distance/v0)*1000:brakeMs;
+    brakeSeconds=brakeMs/1000;
+  }
+  var cruiseDistance=Math.max(0,distance-brakeDistance);
+  var cruiseMs=v0>0?(cruiseDistance/v0)*1000:0;
+  var totalMs=cruiseMs+brakeMs;
+
   var perf=window.performance&&performance.now?performance.now.bind(performance):function(){return Date.now();};
-  var ms=Math.max(900,Number(duration)||1);
   var localToken=(nxPointerAnimationToken=(Number(nxPointerAnimationToken)||0)+1);
-  var start=perf(),finished=false,settling=false,settleFrame=0;
+  var start=perf(),lastNow=start,logicalElapsed=0,finished=false;
+
   function complete(){
     if(finished||localToken!==nxPointerAnimationToken)return;
     finished=true;
     if(nxPointerFinishWatchdog){clearTimeout(nxPointerFinishWatchdog);nxPointerFinishWatchdog=0;}
     if(nxPointerFrame){cancelAnimationFrame(nxPointerFrame);nxPointerFrame=0;}
-    if(settleFrame){cancelAnimationFrame(settleFrame);settleFrame=0;}
-    // At this point the settle animation has already reached the target. The
-    // exact assignment removes sub-pixel drift only and cannot create a jump.
-    nxPointerSpeed=0;nxPointerAngle=targetNorm;nxApplyPointerAngle(targetNorm);
+    nxPointerSpeed=0;
+    nxPointerAngle=targetNorm;
+    nxApplyPointerAngle(targetNorm);
     if(onDone)onDone();
   }
-  function startSettle(){
-    if(finished||settling||localToken!==nxPointerAnimationToken)return;
-    settling=true;
-    if(nxPointerFrame){cancelAnimationFrame(nxPointerFrame);nxPointerFrame=0;}
-    if(nxPointerFinishWatchdog){clearTimeout(nxPointerFinishWatchdog);nxPointerFinishWatchdog=0;}
-    var settleFrom=nxNormalizeAngle(Number(nxPointerAngle));
-    // Use the shortest signed path for the final handoff. Unlike the old
-    // watchdog, this never teleports the pointer to the authoritative target.
-    var settleDelta=((targetNorm-settleFrom+540)%360)-180;
-    var settleMagnitude=Math.abs(settleDelta);
-    var settleMs=Math.max(220,Math.min(560,220+settleMagnitude*1.8));
-    var settleStart=perf();
-    function easeOutCubic(t){return 1-Math.pow(1-t,3);}
-    function settle(now){
-      if(finished||localToken!==nxPointerAnimationToken)return;
-      var t=Math.max(0,Math.min(1,(now-settleStart)/settleMs));
-      var e=easeOutCubic(t);
-      nxPointerAngle=nxNormalizeAngle(settleFrom+settleDelta*e);
-      nxApplyPointerAngle(nxPointerAngle);
-      nxPointerSpeed=Math.max(0,Math.abs(settleDelta)*(1-e)*3.0);
-      if(t>=1){settleFrame=0;complete();return;}
-      settleFrame=requestAnimationFrame(settle);
-    }
-    settleFrame=requestAnimationFrame(settle);
+  function smoothStep5(t){t=Math.max(0,Math.min(1,t));return t*t*t*(t*(t*6-15)+10);}
+  function brakeProgressIntegral(t){
+    /* Integral of 1 - smoothStep5(t); equals 0.5 at t=1. */
+    return t-Math.pow(t,6)+3*Math.pow(t,5)-2.5*Math.pow(t,4);
   }
-  function easeOutQuint(t){return 1-Math.pow(1-t,5);}
   function frame(now){
     if(localToken!==nxPointerAnimationToken||finished)return;
-    var t=Math.max(0,Math.min(1,(now-start)/ms));
-    var e=easeOutQuint(t),s=e*distance;
-    var prevS=frame._s||0,dt=Math.max(1,now-(frame._last||now));
-    nxPointerSpeed=Math.max(0,(s-prevS)/dt*1000);frame._s=s;frame._last=now;
-    nxPointerAngle=nxNormalizeAngle(from+s);nxApplyPointerAngle(nxPointerAngle);
-    if(t>=1){startSettle();return;}
+    /*
+     * Limit logical time advance to 34 ms. A delayed RAF therefore cannot
+     * teleport the pointer across a large angle; the animation simply takes
+     * a little longer while the browser catches up.
+     */
+    var realDt=Math.max(0,Math.min(34,now-lastNow));
+    lastNow=now;
+    logicalElapsed=Math.min(totalMs,logicalElapsed+realDt);
+
+    var travel,speed;
+    if(logicalElapsed<=cruiseMs){
+      travel=v0*(logicalElapsed/1000);
+      speed=v0;
+    }else{
+      var bt=brakeMs>0?Math.max(0,Math.min(1,(logicalElapsed-cruiseMs)/brakeMs)):1;
+      travel=cruiseDistance+brakeDistance*brakeProgressIntegral(bt);
+      speed=v0*(1-smoothStep5(bt));
+    }
+    /*
+     * Monotonic clamp prevents numerical drift at the cruise/brake boundary.
+     * It is not an angle snap: travel is always <= distance and non-decreasing.
+     */
+    var travelCap=Math.max(0,Math.min(distance,travel));
+    nxPointerAngle=nxNormalizeAngle(from+travelCap);
+    nxPointerSpeed=Math.max(0,speed);
+    nxApplyPointerAngle(nxPointerAngle);
+
+    if(logicalElapsed>=totalMs){complete();return;}
     nxPointerFrame=requestAnimationFrame(frame);
   }
-  // Safari/iOS can delay a RAF callback. The watchdog no longer finalizes with
-  // a snap; it enters the same smooth settle path used by the normal finish.
-  nxPointerFinishWatchdog=setTimeout(startSettle,ms+180);
+
+  /* Non-visual watchdog. It never changes angle or starts a second trajectory. */
+  nxPointerFinishWatchdog=setTimeout(function(){
+    if(finished||localToken!==nxPointerAnimationToken)return;
+    nxPointerFinishWatchdog=0;
+    if(!nxPointerFrame)nxPointerFrame=requestAnimationFrame(frame);
+  },totalMs+260);
+
   nxPointerFrame=requestAnimationFrame(frame);
 }
 
