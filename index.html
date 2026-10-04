@@ -755,6 +755,32 @@ button,input,select{font-size:16px}
   pointer-events:none!important;
 }
 </style>
+<style id="nx-v60-upgrade-online">
+/* V60: calm result handoff + admin presence list */
+.up12-machine-top{transition:filter .32s ease,opacity .32s ease;}
+.up12-machine-top.nx-upgrade-resetting .up12-wheel-wrap,
+.up12-machine-top.nx-upgrade-resetting .up12-preview-row,
+.up12-machine-top.nx-upgrade-resetting #up12Run,
+.up12-machine-top.nx-upgrade-resetting #nxUpgradeCaptchaGate,
+.up12-machine-top.nx-upgrade-resetting #up12InlineStatus,
+.up12-machine-top.nx-upgrade-resetting .up12-balance-line,
+.up12-machine-top.nx-upgrade-resetting .up12-mult-row{
+  opacity:0;transform:translateY(4px) scale(.985);filter:blur(1.5px);
+  transition:opacity .36s ease,transform .36s ease,filter .36s ease;
+}
+.nx-online-grid{display:grid;gap:7px;margin-top:9px;max-height:58vh;overflow:auto;padding-right:2px;}
+.nx-online-card{display:flex;align-items:center;gap:9px;padding:10px 11px;border:1px solid rgba(74,222,128,.14);border-radius:12px;background:linear-gradient(145deg,#11171a,#0d1116);}
+.nx-online-dot{width:9px;height:9px;flex:0 0 9px;border-radius:50%;background:#4ade80;box-shadow:0 0 10px rgba(74,222,128,.65);}
+.nx-online-copy{min-width:0;flex:1;}
+.nx-online-name{font-size:11px;font-weight:950;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.nx-online-meta{margin-top:3px;color:#7f8a96;font-size:9px;line-height:1.3;}
+.nx-online-tag{font-size:8px;color:#67e8f9;border:1px solid rgba(103,232,249,.18);padding:3px 6px;border-radius:999px;}
+.nx-online-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:9px;}
+.nx-online-stat{padding:8px;text-align:center;border:1px solid rgba(255,255,255,.06);border-radius:10px;background:#10141a;}
+.nx-online-stat b{display:block;font-size:15px;color:#dfffe8;}
+.nx-online-stat span{display:block;margin-top:2px;font-size:8px;color:#808997;text-transform:uppercase;}
+@media(max-width:560px){.nx-online-summary{grid-template-columns:repeat(3,1fr)}.nx-online-card{padding:9px}}
+</style>
 </head>
 <body>
 <div class="app">
@@ -1166,7 +1192,11 @@ var _onlineSid = (function(){
 
 async function pingOnline() {
   try {
-    var r = await fetch(apiUrl('/api/heartbeat'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid: _onlineSid }) });
+    var r = await fetch(apiUrl('/api/heartbeat'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sid: _onlineSid, token: authToken || '' })
+    });
     var d = await r.json();
     if (d.ok && typeof d.online === 'number') {
       var el = document.getElementById('onlineCount');
@@ -1176,7 +1206,7 @@ async function pingOnline() {
 }
 handleSteamCallback().catch(function(){});
 pingOnline();
-setInterval(pingOnline, 90000);
+setInterval(pingOnline, 45000);
 
 function procModel(name) {
   var n = String(name);
@@ -2419,6 +2449,7 @@ function up12TargetMatches(x,st){
   return (!st.search||n.indexOf(st.search)!==-1)&&p>=st.min&&p<=st.max;
 }
 function toggleUpgradeSource(i){
+  nxDismissUpgradeResult();
   i=Number(i);
   var item=(state.inventory||[])[i];
   if(!item||!item.id)return false;
@@ -2490,6 +2521,7 @@ function upgradeTargetLoadMore(){_upgradeTargetLimit=Math.min(_upgradeTargetLimi
 function filterUpgradeTargets(){_upgradeTargetLimit=80;renderUpgradeTargetCatalog();updateUpgradePreview();return false;}
 function selectUpgradeTargetByIndex(i){var x=_upgradeTargetFiltered[Number(i)];if(!x)return false;return selectUpgradeTarget(String(x[0]));}
 function selectUpgradeTarget(name){
+  nxDismissUpgradeResult();
   var x=(skinsList||[]).find(function(s){return s[0]===name;});if(!x)return false;
   if(!up9TargetEligible(x)){showInfo('Цель недоступна','Желаемый скин не может стоить дешевле общей ставки.');return false;}
   upgradeTargetName=String(x[0]);upgradeTargetPrice=getCatalogPrice(x[0],x[1]);selectedUpgrade=null;_upgradeQuickSelection=null;
@@ -2517,6 +2549,7 @@ function pickPct(pct){
   return pickUpgradeTargetByPrice(total/(pct/100));
 }
 function clearUpgradeSources(){
+  nxDismissUpgradeResult();
   _upgradeSelectedIds=[];selectedUpgrade=null;upgradeTargetName='';upgradeTargetPrice=0;_upgradeQuickSelection=null;
   renderUpgradeSourceList();renderUpgradeTargetCatalog();updateUpgradePreview();return false;
 }
@@ -2591,6 +2624,7 @@ function nxForcedUpgradeVisualAngle(chancePct,success){
   return success?180:0;
 }
 function updateUpgradePreview(){
+  if(nxUpgradeResultVisible && !_activeUpgrade)return;
   var srcs=getUpgradeSources(),total=getUpgradeTotalPrice();
   var target=upgradeTargetName?(skinsList||[]).find(function(x){return x[0]===upgradeTargetName;}):null;
   if(target&&!up9TargetEligible(target)){target=null;upgradeTargetName='';upgradeTargetPrice=0;selectedUpgrade=null;}
@@ -2762,6 +2796,7 @@ function renderUpgrade(m){
   startMarketPriceSync();
 }
 var nxPointerAngle=0,nxPointerFrame=0,nxPointerLoopFrame=0,nxPointerLoopLast=0,nxPointerSpeed=0;
+var nxUpgradeResultVisible=false;
 var nxUpgradeAudioCtx=null,nxUpgradeSoundTimer=null,nxUpgradeSoundTick=0,nxUpgradeNoiseBuffer=null;
 function nxPointerOrbit(){return document.getElementById('up12Pointer')||document.getElementById('up12PointerShape');}
 function nxApplyPointerAngle(angle){
@@ -2796,6 +2831,15 @@ function nxApplyPointerAngle(angle){
 }
 function nxSetUpgradePointerAngle(deg,immediate){var n=Number(deg);if(!Number.isFinite(n))n=0;nxPointerAngle=nxNormalizeAngle(n);nxApplyPointerAngle(nxPointerAngle);if(immediate)nxPointerSpeed=0;}
 function nxStopPointerAnimation(){if(nxPointerFrame){cancelAnimationFrame(nxPointerFrame);nxPointerFrame=0;}}
+function nxDismissUpgradeResult(){
+  if(!nxUpgradeResultVisible)return;
+  nxUpgradeResultVisible=false;
+  var fx=document.querySelector('.nx-upgrade-win-fx');if(fx)fx.remove();
+  document.querySelectorAll('.up12-preview-card.nx-target-win').forEach(function(x){x.classList.remove('nx-target-win');});
+  var pointer=document.getElementById('up12Pointer');if(pointer){pointer.classList.remove('result-win','result-lose');nxSetUpgradePointerAngle(0,true);}
+  var wheel=document.getElementById('up12Wheel');if(wheel)wheel.classList.remove('result-win','result-lose');
+  var stage=document.querySelector('.up12-machine-top');if(stage)stage.classList.remove('nx-upgrade-resetting');
+}
 async function nxAbortUpgradeVisual(requestId,stage,btn,status,message){
   var minDuration=upgradeQuickMode?500:700;
   var now=(window.performance&&performance.now)?performance.now():Date.now();
@@ -2806,7 +2850,7 @@ async function nxAbortUpgradeVisual(requestId,stage,btn,status,message){
   nxStopPointerAnimation();
   nxStopUpgradeSpinSound();
   _activeUpgrade=null;
-  if(stage)stage.classList.remove('nx-upgrade-pointer-spinning');
+  if(stage){stage.classList.remove('nx-upgrade-pointer-spinning');stage.classList.remove('nx-upgrade-resetting');}nxUpgradeResultVisible=false;
   if(btn){btn.disabled=false;btn.textContent='ЗАПУСТИТЬ АПГРЕЙД';}
   if(status){status.className='nx-upgrade-inline-status show lose';status.innerHTML='<b>ОПЕРАЦИЯ НЕ ЗАВЕРШЕНА</b>'+escapeHtml(message||'Сервер не вернул результат.');}
   return false;
@@ -2847,10 +2891,13 @@ function nxAnimatePointerTo(target,duration,turns,onDone){
   var perf=window.performance&&performance.now?performance.now.bind(performance):function(){return Date.now();};
   var ms=Math.max(450,Number(duration)||1);
   var start=perf();
-  function easeInOutCubic(t){return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
+  // VIP-style feel: quick launch, long controlled deceleration, then a clean stop.
+  // The completed frame is kept visible by the result-state lock below; it is
+  // dismissed only when the player starts editing the next upgrade.
+  function easeOutCubic(t){return 1-Math.pow(1-t,3);}
   function frame(now){
     var t=Math.max(0,Math.min(1,(now-start)/ms));
-    var e=easeInOutCubic(t);
+    var e=easeOutCubic(t);
     var s=distance*e;
     var prevS=frame._s||0;
     var dt=Math.max(1,now-(frame._last||now));
@@ -3047,8 +3094,8 @@ async function doUpgrade(){
   if(nxUpgradePointerIsInWinZone(finalDeg,chancePct)!==success){
     return await nxAbortUpgradeVisual(requestId,stage,btn,status,'Сервер вернул несовместимые данные результата. Операция остановлена без повторного списания.');
   }
-  var duration=NX_UPGRADE_SETTINGS&&NX_UPGRADE_SETTINGS.speed==='fast'?1650:2850;
-  var finalTurns=NX_UPGRADE_SETTINGS&&NX_UPGRADE_SETTINGS.speed==='fast'?2.6:3.8;
+  var duration=NX_UPGRADE_SETTINGS&&NX_UPGRADE_SETTINGS.speed==='fast'?2050:3400;
+  var finalTurns=NX_UPGRADE_SETTINGS&&NX_UPGRADE_SETTINGS.speed==='fast'?2.7:4.1;
   if(stage)stage.classList.remove('nx-upgrade-pointer-spinning');
   if(status){status.className='nx-upgrade-inline-status show';status.textContent='Результат получен. Показываем исход…';}
   nxStopPointerLoop();
@@ -3060,22 +3107,23 @@ async function doUpgrade(){
     nxStopUpgradeSpinSound();nxPrimeUpgradeAudio();nxPlayUpgradeResultSound(success);if(success)nxShowUpgradeWinFx();
     if(pointer){nxSetUpgradePointerAngle(finalDeg,true);pointer.classList.add(success?'result-win':'result-lose');}
     if(wheel)wheel.classList.add(success?'result-win':'result-lose');
+    if(btn){btn.disabled=true;btn.textContent=success?'УСПЕХ':'ГОТОВО';}
     if(status){status.className='nx-upgrade-inline-status show '+(success?'win':'lose');status.innerHTML='<b>'+(success?'УСПЕХ':'НЕУДАЧА')+'</b>'+(success?'Выдан <strong>'+safeSkinLabel(serverTarget.name)+'</strong> · '+money(serverTarget.price):'Исходные предметы списаны. Новый предмет не выдан.');}
     try{if(navigator.vibrate)navigator.vibrate(success?[45,30,80]:[35,25,55]);}catch(e){}
-    setTimeout(function(){
-      if(_activeUpgrade!==requestId)return;
-      _activeUpgrade=null;if(btn){btn.disabled=false;btn.textContent='ЗАПУСТИТЬ АПГРЕЙД';}
-      _upgradeSelectedIds=[];selectedUpgrade=null;upgradeTargetName='';upgradeTargetPrice=0;_upgradeQuickSelection=null;
-      renderUpgradeSourceList();renderUpgradeTargetCatalog();updateUpgradePreview();
-      if(status){status.className='nx-upgrade-inline-status';status.textContent='';status.innerHTML='';}
-      if(pointer){nxStopPointerLoop();nxStopPointerAnimation();pointer.classList.remove('result-win','result-lose');nxSetUpgradePointerAngle(0,true);}
-      if(wheel)wheel.classList.remove('result-win','result-lose');
-      nxInitUpgradeCaptcha();
-    },1100);
-  },duration+40);
+    // Lock the completed result in place. The previous implementation cleared
+    // the preview after a fixed timeout, producing the visible "55% -> 0%"
+    // snap at the very last frame. The result now stays rendered until the
+    // player edits the next upgrade, exactly like a premium upgrader flow.
+    nxUpgradeResultVisible=true;
+    _activeUpgrade=null;
+    _upgradeSelectedIds=[];selectedUpgrade=null;upgradeTargetName='';upgradeTargetPrice=0;_upgradeQuickSelection=null;
+    renderUpgradeSourceList();renderUpgradeTargetCatalog();
+    if(btn){btn.disabled=true;btn.textContent='НОВАЯ СТАВКА';}
+    nxInitUpgradeCaptcha();
+  },duration+80);
   return false;
 }
-function closeUpgradeView(){var wasRecordingPage=currentPage==='recording';_activeUpgrade=null;var fx=document.querySelector('.nx-upgrade-win-fx');if(fx)fx.remove();document.querySelectorAll('.up12-preview-card.nx-target-win').forEach(function(x){x.classList.remove('nx-target-win');});nxStopPointerLoop();nxStopPointerAnimation();nxStopUpgradeSpinSound();var stage=document.querySelector('.up12-machine-top');if(stage)stage.classList.remove('nx-upgrade-pointer-spinning');var btn=document.getElementById('up12Run');if(btn){btn.disabled=false;btn.textContent='ЗАПУСТИТЬ АПГРЕЙД';}var pointer=document.getElementById('up12Pointer');if(pointer){pointer.classList.remove('result-win','result-lose');nxSetUpgradePointerAngle(0,true);}closeModal('genericModal');if(wasRecordingPage)go('recording');return false;}
+function closeUpgradeView(){var wasRecordingPage=currentPage==='recording';nxDismissUpgradeResult();_activeUpgrade=null;var fx=document.querySelector('.nx-upgrade-win-fx');if(fx)fx.remove();document.querySelectorAll('.up12-preview-card.nx-target-win').forEach(function(x){x.classList.remove('nx-target-win');});nxStopPointerLoop();nxStopPointerAnimation();nxStopUpgradeSpinSound();var stage=document.querySelector('.up12-machine-top');if(stage){stage.classList.remove('nx-upgrade-pointer-spinning');stage.classList.remove('nx-upgrade-resetting');}var btn=document.getElementById('up12Run');if(btn){btn.disabled=false;btn.textContent='ЗАПУСТИТЬ АПГРЕЙД';}var pointer=document.getElementById('up12Pointer');if(pointer){pointer.classList.remove('result-win','result-lose');nxSetUpgradePointerAngle(0,true);}closeModal('genericModal');if(wasRecordingPage)go('recording');return false;}
 function cancelUpgrade(){return closeUpgradeView();}
 
 function openCase(caseName) {
@@ -3906,6 +3954,13 @@ function applyUser(u) {
   state.deposited = Number(u.deposited || 0);
   state.avatar = u.avatar || null;
   updateBalanceUI();
+  try {
+    if (window.__nxOnlineAuthRefreshTimer) clearTimeout(window.__nxOnlineAuthRefreshTimer);
+    window.__nxOnlineAuthRefreshTimer = setTimeout(function(){
+      window.__nxOnlineAuthRefreshTimer = 0;
+      if (typeof pingOnline === 'function') pingOnline();
+    }, 180);
+  } catch(e) {}
 }
 
 
@@ -4297,6 +4352,7 @@ function finishUpdateRelease(){
   setAdminMaintenance(false);
 }
 async function renderAdmin() {
+  stopAdminOnlinePolling();
   if (!adminToken) { adminOpen(); return; }
   var box = document.getElementById('adminDialog');
   box.innerHTML = adminReleaseBar() + '<div id="adminTabContent"></div>';
@@ -4351,7 +4407,7 @@ async function renderAdminPlayers(box) {
     box.innerHTML = adminTabs('players') +
       '<div class="admin-dashboard"><div class="admin-stat"><b>'+users.length+'</b><span>игроков</span></div><div class="admin-stat"><b>'+banned+'</b><span>банов</span></div><div class="admin-stat"><b>'+money(totalBalance)+'</b><span>балансы</span></div><div class="admin-stat"><b>'+users.reduce(function(a,u){return a+(u.inventory?u.inventory.length:0)},0)+'</b><span>скинов</span></div></div>' +
       '<div style="margin:8px 0;padding:9px 10px;border:1px solid rgba(255,171,52,.18);border-radius:10px;background:rgba(255,171,52,.05);color:#aeb6c2;font-size:11px">🎬 Режим съёмки выдаётся отдельно каждому логину. Управление доступом — кнопками у нужного игрока ниже.</div>' +
-      '<div class="admin-search-row"><input class="input" id="adminUserSearch" placeholder="Поиск по нику или логину..." oninput="filterAdminUsers()"><button class="login-pill" onclick="refreshAdminPlayersLive()">↻ Синхронизировать</button></div>' +
+      '<div class="admin-search-row"><input class="input" id="adminUserSearch" placeholder="Поиск по нику или логину..." oninput="filterAdminUsers()"><button class="login-pill" style="border-color:rgba(74,222,128,.28);color:#8ef0a6" onclick="renderAdminOnline()">🟢 Онлайн</button><button class="login-pill" onclick="refreshAdminPlayersLive()">↻ Синхронизировать</button></div>' +
       '<div id="adminPlayersFresh" class="muted" style="font-size:10px;margin:7px 1px">Источник: сервер · проверка ' + (d.serverTime?new Date(d.serverTime).toLocaleTimeString('ru-RU'):'—') + '</div>' +
       '<div id="adminUserList" style="max-height:58vh;overflow:auto"></div>';
     window._adminUsers = users;
@@ -4375,6 +4431,39 @@ async function refreshAdminPlayersLive(){
     if(fresh)fresh.textContent='Источник: сервер · проверка '+(d.serverTime?new Date(d.serverTime).toLocaleTimeString('ru-RU'):'—')+' · '+(d.storage||'D1');
   }catch(e){showInfo('Ошибка','Не удалось получить данные игроков. Проверьте D1-Worker и повторите синхронизацию.');}
   finally{if(btn){btn.disabled=false;btn.textContent='↻ Синхронизировать';}}
+}
+
+var nxAdminOnlineTimer=0;
+function stopAdminOnlinePolling(){if(nxAdminOnlineTimer){clearInterval(nxAdminOnlineTimer);nxAdminOnlineTimer=0;}}
+async function renderAdminOnline(){
+  if(!isAdminUI||!adminToken)return showInfo('Доступ','Список онлайн доступен только администратору.');
+  stopAdminOnlinePolling();
+  var box=document.getElementById('adminDialog');if(!box)return;
+  box.innerHTML=adminReleaseBar()+adminTabs('players')+
+    '<div class="panel"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><div><h3 style="margin:0">🟢 Кто онлайн</h3><div class="muted" style="margin-top:4px;font-size:10px">Список обновляется автоматически · без IP и других скрытых данных.</div></div><div style="display:flex;gap:6px"><button class="login-pill" onclick="renderAdmin()">← Игроки</button><button class="login-pill" onclick="refreshAdminOnline()">↻</button></div></div><div id="adminOnlineBody"><div class="muted" style="margin-top:10px">Загрузка...</div></div></div>';
+  await refreshAdminOnline();
+  if(document.getElementById('adminOnlineBody')) nxAdminOnlineTimer=setInterval(function(){if(document.getElementById('adminOnlineBody'))refreshAdminOnline(true);else stopAdminOnlinePolling();},15000);
+}
+async function refreshAdminOnline(silent){
+  var body=document.getElementById('adminOnlineBody');if(!body||!adminToken)return;
+  try{
+    var r=await fetch(apiUrl('/api/admin/online'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({adminToken:adminToken,ts:Date.now()}),cache:'no-store'});
+    var d=await readJsonResponse(r);
+    if(!r.ok||!d.ok){if(!silent)body.innerHTML='<div class="muted">'+escapeHtml(nxAdminApiError(r,d,'Не удалось получить список онлайн.'))+'</div>';return;}
+    var list=Array.isArray(d.users)?d.users:[];
+    var sessions=Number(d.onlineSessions||d.online||0),unique=Number(d.onlineUsers||list.length||0),guests=Number(d.guests||0);
+    var cards=list.map(function(u){
+      var name=String(u.displayName||u.username||'Посетитель');
+      var login=u.username?String(u.username):'гость';
+      var ago=Math.max(0,Date.now()-Number(u.lastSeenAt||0));
+      var age=ago<10000?'только что':(ago<60000?Math.max(1,Math.floor(ago/1000))+' сек назад':Math.floor(ago/60000)+' мин назад');
+      var sessionTag=Number(u.sessions||1)>1?'<span class="nx-online-tag">'+Number(u.sessions||1)+' сесс.</span>':'';
+      return '<div class="nx-online-card"><i class="nx-online-dot"></i><div class="nx-online-copy"><div class="nx-online-name">'+escapeHtml(name)+'</div><div class="nx-online-meta">@'+escapeHtml(login)+' · '+escapeHtml(age)+'</div></div>'+sessionTag+'</div>';
+    }).join('');
+    body.innerHTML='<div class="nx-online-summary"><div class="nx-online-stat"><b>'+unique+'</b><span>игроков</span></div><div class="nx-online-stat"><b>'+sessions+'</b><span>сессий</span></div><div class="nx-online-stat"><b>'+guests+'</b><span>гостей</span></div></div>'+
+      '<div class="muted" style="font-size:9px;margin-top:8px">Последняя проверка: '+escapeHtml(new Date(Number(d.serverTime||Date.now())).toLocaleTimeString('ru-RU'))+'</div>'+
+      '<div class="nx-online-grid">'+(cards||'<div class="muted" style="padding:12px 0">Сейчас никто не авторизован.</div>')+'</div>';
+  }catch(e){if(!silent)body.innerHTML='<div class="muted">Сервер онлайн-списка недоступен.</div>';}
 }
 
 function renderAdminUserList(users) {
