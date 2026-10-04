@@ -995,7 +995,7 @@ async function checkWorker() {
   try {
     var r=await fetch(apiUrl('/health'),{method:'GET',cache:'no-store'});
     var d=await r.json().catch(function(){return{};});
-    var ok=r.ok && d && d.ok===true && Number(d.version||0)>=20;
+    var ok=r.ok && d && d.ok===true && Number(d.version||0)>=NX_REQUIRED_WORKER_VERSION;
     if(dot) dot.style.background=ok?'#4ade80':'#ef4444';
     el.style.color=ok?'#4ade80':'#f87171';
     el.style.borderColor=ok?'rgba(74,222,128,.25)':'rgba(239,68,68,.25)';
@@ -1010,6 +1010,8 @@ async function checkWorker() {
   }
 }
 
+var NX_REQUIRED_WORKER_VERSION = 70;
+var NX_REQUIRED_PROTOCOL_VERSION = 14;
 var currentPage = 'upgrade', leaderTab = 'balance', adminTab = 'players';
 var currentEvent = null, selectedUpgrade = null;
 var currentUser = null;
@@ -2012,11 +2014,14 @@ function startEventTimer() {
 
 var marketPriceOverrides = Object.create(null);
 var marketPriceMeta = Object.create(null);
-var lisCatalogPriceLocked = Object.create(null);
-var lisCatalogSource = 'fallback';
 var marketPriceSyncRunning = false;
 var marketPriceBatchSize = 20;
 var MARKET_PRICE_CLIENT_TTL = 60 * 1000;
+try{
+  localStorage.removeItem('nexusdrop_steam_prices_v3');
+  localStorage.removeItem('nexus_public_cache_v2:skins-v59');
+  localStorage.removeItem('nexus_public_cache_v2:public-bootstrap-v59');
+}catch(e){}
 var MARKET_PRICE_POLL_MS = 60 * 1000;
 var _marketPricePollTimer = null;
 var _marketPriceSearchTimer = null;
@@ -2034,7 +2039,7 @@ function marketSourceBadge(name) {
 
 function loadMarketPriceCache() {
   try {
-    var raw=JSON.parse(localStorage.getItem('nexusdrop_steam_prices_v3')||'{}');
+    var raw=JSON.parse(localStorage.getItem('nexusdrop_steam_prices_v4')||'{}');
     if(!raw||typeof raw!=='object')return;
     Object.keys(raw).forEach(function(k){
       var v=raw[k];
@@ -2052,7 +2057,7 @@ function saveMarketPriceCache() {
       var meta=marketPriceMeta[k]||{};
       out[k]={price:marketPriceOverrides[k],fetchedAt:Number(meta.fetchedAt||Date.now()),matchedName:meta.matchedName||'',source:meta.source||'Steam Community Market'};
     });
-    localStorage.setItem('nexusdrop_steam_prices_v3',JSON.stringify(out));
+    localStorage.setItem('nexusdrop_steam_prices_v4',JSON.stringify(out));
   } catch(e) {}
 }
 async function fetchMarketPriceBatch(names, forceRefresh) {
@@ -2606,7 +2611,7 @@ function updateUpgradePreview(){
   // In the separate recording page the wheel always shows the ordinary
   // displayed chance. The demo server result may still be a guaranteed
   // outcome, but that does not alter the on-screen percentage.
-  if(currentPage !== 'recording' && currentUser&&currentUser.upgradeBoost)effective=Math.min(100,effective+15);
+  if(currentPage !== 'recording' && currentUser&&currentUser.upgradeBoost)effective=Math.min(80,effective+15);
   var pct=document.getElementById('up12Chance'),bar=document.getElementById('up12ChanceBar'),btn=document.getElementById('up12Run');
   if(pct)pct.textContent=nxFormatChance(effective);
   var chanceLabel=document.getElementById('up12ChanceLabel');if(chanceLabel)chanceLabel.textContent=nxChanceLabel(effective);
@@ -3009,7 +3014,7 @@ async function doUpgrade(){
   if(!committed){
     return await nxAbortUpgradeVisual(requestId,stage,btn,status,'Не получено подтверждение серверного списания.');
   }
-  var success=d.success===true,serverChance=Number(d.chance),serverRoll=Number(d.roll),serverPointerAngle=Number(d.pointerAngle),serverMult=Number(d.multiplier),serverTarget=d.target||{name:target,price:targetPrice};
+  var success=d.success===true,serverChance=Number(d.chance),serverRoll=Number(d.roll),serverMult=Number(d.multiplier),serverTarget=d.target||{name:target,price:targetPrice};
   nxUpgradeWinBounds=null;
   if(!Number.isFinite(serverChance)||!Number.isFinite(serverRoll)||!Number.isFinite(serverMult)){
     return await nxAbortUpgradeVisual(requestId,stage,btn,status,'Не удалось получить корректные данные операции.');
@@ -3027,16 +3032,15 @@ async function doUpgrade(){
   var appliedOutcomeMode=['win','lose'].includes(String(d.appliedOutcomeMode||'').toLowerCase())?String(d.appliedOutcomeMode).toLowerCase():'normal';
   var finalDeg;
   if(appliedOutcomeMode==='win'){
-    // Admin-forced win: land exactly in the middle of the visible win sector.
+    // Admin-forced win: land exactly in the middle of the authoritative win sector.
     finalDeg=nxForcedUpgradeVisualAngle(chancePct,true);
   }else if(appliedOutcomeMode==='lose'){
-    // Admin-forced loss: land in the middle of the complementary sector.
+    // Admin-forced loss: land exactly in the middle of the complementary sector.
     finalDeg=nxForcedUpgradeVisualAngle(chancePct,false);
-  }else if(Number.isFinite(serverPointerAngle) && serverPointerAngle>=0 && serverPointerAngle<360 && nxUpgradePointerIsInWinZone(serverPointerAngle,chancePct)===success){
-    finalDeg=nxNormalizeAngle(serverPointerAngle);
   }else{
-    // Backward-compatible deterministic fallback for older Workers or small
-    // floating-point differences: derive the same visual mapping locally.
+    // The server's success/roll/chance are authoritative; rebuild the final angle
+    // locally so even a stale pointerAngle from an older Worker cannot disagree
+    // with the visible result. The server pointerAngle remains an audit field.
     finalDeg=nxCanonicalUpgradeVisualAngle(chancePct,rollPercent,success);
   }
   // The visible wheel must always agree with the authoritative server result.
@@ -3302,9 +3306,9 @@ async function buySkin(i){
     _shopOperationLock=true;
     var dlg=document.getElementById('genericDialog');
     try{
-      var cap=await checkWorkerVersion(20);
+      var cap=await checkWorkerVersion(NX_REQUIRED_WORKER_VERSION);
       if(!cap.ok){
-        throw new Error('Сервер магазина не опубликован на l1nxs-bot. Сейчас Worker V'+(cap.version||'неизвестной версии')+'. Нужен загруженный worker.js V20.');
+        throw new Error('Сервер магазина не опубликован на l1nxs-bot. Сейчас Worker V'+(cap.version||'неизвестной версии')+'. Нужен актуальный worker.js V70.');
       }
       closeModal('genericModal');
       if(!dlg)return;
@@ -4087,8 +4091,8 @@ async function invUpgrade(itemIds, targetName, targetPrice, requestId, mode) {
   if (missing) return {ok:false,error:'Один из предметов отсутствует в инвентаре'};
   if(window._apiProtocolOk!==true){
     try{
-      var cap=await checkWorkerVersion(20);
-      if(!cap.ok)return {ok:false,error:'Живой Worker V'+(cap.version||'неизвестен')+' не содержит актуальный протокол апгрейда. Нужен worker.js V20 в l1nxs-bot.'};
+      var cap=await checkWorkerVersion(NX_REQUIRED_WORKER_VERSION);
+      if(!cap.ok)return {ok:false,error:'Живой Worker V'+(cap.version||'неизвестен')+' не содержит актуальный протокол апгрейда. Нужен актуальный worker.js V70 в l1nxs-bot.'};
     }catch(e){return {ok:false,error:'Не удалось проверить Worker: '+(e&&e.message?e.message:'ошибка сети'),network:true};}
   }
   var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -5017,7 +5021,7 @@ function cacheServerSkinImages(list){
 function normalizeServerSkinList(list){
   if(!Array.isArray(list))return [];
   cacheServerSkinImages(list);
-  lisCatalogPriceLocked=Object.create(null);lisCatalogSource='steam-market';
+  
   var seen={},out=[];
   list.forEach(function(s){
     var name=String(s&&s.name||'').trim(),price=Number(s&&s.price||0);if(!name||!(price>0))return;
@@ -5027,25 +5031,25 @@ function normalizeServerSkinList(list){
   });return out;
 }
 async function syncServerCatalogs(){
-  var cached=nxReadPublicCache('skins-v59',5*60*1000);
+  var cached=nxReadPublicCache('skins-v60',5*60*1000);
   if(cached&&Array.isArray(cached)&&cached.length){skinsList=normalizeServerSkinList(cached);return true;}
   var controller=typeof AbortController!=='undefined'?new AbortController():null;
   var timer=controller?setTimeout(function(){try{controller.abort();}catch(e){}},8000):null;
   try{
     var r=await fetch(apiUrl('/api/skins'),{method:'GET',cache:'no-store',signal:controller?controller.signal:undefined}),d=await r.json().catch(function(){return{};});
-    if(d.ok&&Array.isArray(d.skins)&&d.skins.length){skinsList=normalizeServerSkinList(d.skins);try{localStorage.removeItem('nexusdrop_steam_prices_v3');}catch(e){}marketPriceOverrides=Object.create(null);marketPriceMeta=Object.create(null);nxWritePublicCache('skins-v59',d.skins);return true;}
+    if(d.ok&&Array.isArray(d.skins)&&d.skins.length){skinsList=normalizeServerSkinList(d.skins);try{localStorage.removeItem('nexusdrop_steam_prices_v4');}catch(e){}marketPriceOverrides=Object.create(null);marketPriceMeta=Object.create(null);nxWritePublicCache('skins-v60',d.skins);return true;}
     return false;
   }catch(e){console.warn('server skins sync failed',e);return false;}
   finally{if(timer)clearTimeout(timer);}
 }
 
 async function loadPublicBootstrap(){
-  var cached = nxReadPublicCache('public-bootstrap-v59', 30 * 1000);
+  var cached = nxReadPublicCache('public-bootstrap-v60', 30 * 1000);
   if (cached && cached.ok) {
     if (Array.isArray(cached.skins) && cached.skins.length) {
       skinsList=normalizeServerSkinList(cached.skins);
     }
-    window._apiProtocolOk=Number(cached.protocolVersion||0)>=2&&Number(cached.version||0)>=20;
+    window._apiProtocolOk=Number(cached.protocolVersion||0)>=NX_REQUIRED_PROTOCOL_VERSION&&Number(cached.version||0)>=NX_REQUIRED_WORKER_VERSION;
     siteConfig.brand=String(cached.brand||'NEXUSDROP');
     siteConfig.newsUrl=String(cached.newsUrl||siteConfig.newsUrl);
     siteConfig.supportUrl=String(cached.supportUrl||siteConfig.supportUrl);
@@ -5059,14 +5063,14 @@ async function loadPublicBootstrap(){
     var r=await fetch(apiUrl('/api/public/bootstrap'),{method:'GET'});
     var d=await r.json().catch(function(){return{};});
     if(!(r.ok&&d.ok)) return false;
-    nxWritePublicCache('public-bootstrap-v59',d);
+    nxWritePublicCache('public-bootstrap-v60',d);
     if(Array.isArray(d.skins)&&d.skins.length){
       skinsList=normalizeServerSkinList(d.skins);
       nxWritePublicCache('skins',skinsList);
     }
     nxWritePublicCache('api-version',{ok:true,version:d.version,protocolVersion:d.protocolVersion});
     nxWritePublicCache('site-config',d);
-    window._apiProtocolOk=Number(d.protocolVersion||0)>=2&&Number(d.version||0)>=20;
+    window._apiProtocolOk=Number(d.protocolVersion||0)>=NX_REQUIRED_PROTOCOL_VERSION&&Number(d.version||0)>=NX_REQUIRED_WORKER_VERSION;
     siteConfig.brand=String(d.brand||'NEXUSDROP');
     siteConfig.newsUrl=String(d.newsUrl||siteConfig.newsUrl);
     siteConfig.supportUrl=String(d.supportUrl||siteConfig.supportUrl);
@@ -5080,11 +5084,11 @@ async function loadPublicBootstrap(){
 
 async function verifyApiProtocol(){
   var cached = nxReadPublicCache('api-version', 10 * 60 * 1000);
-  if (cached) { window._apiProtocolOk=!!(cached.ok&&Number(cached.protocolVersion||0)>=2&&Number(cached.version||0)>=20); return window._apiProtocolOk; }
+  if (cached) { window._apiProtocolOk=!!(cached.ok&&Number(cached.protocolVersion||0)>=NX_REQUIRED_PROTOCOL_VERSION&&Number(cached.version||0)>=NX_REQUIRED_WORKER_VERSION); return window._apiProtocolOk; }
   try{
     var r=await fetch(apiUrl('/api/version'),{method:'GET'}),d=await r.json().catch(function(){return{};});
     nxWritePublicCache('api-version',d);
-    window._apiProtocolOk=!!(r.ok&&d.ok&&Number(d.protocolVersion||0)>=2&&Number(d.version||0)>=20);
+    window._apiProtocolOk=!!(r.ok&&d.ok&&Number(d.protocolVersion||0)>=NX_REQUIRED_PROTOCOL_VERSION&&Number(d.version||0)>=NX_REQUIRED_WORKER_VERSION);
     if(!window._apiProtocolOk) console.warn('NEXUS DROP API protocol mismatch',d);
     return window._apiProtocolOk;
   }catch(e){window._apiProtocolOk=false;console.warn('NEXUS DROP API version check failed',e);return false;}
