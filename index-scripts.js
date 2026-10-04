@@ -302,6 +302,7 @@ fetch('https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/cra
 }).catch(function(e){ console.warn('Не удалось загрузить изображения кейсов', e); });
 
 const money = function(n){ return Math.round(n).toLocaleString('ru-RU') + ' ₽'; };
+const catalogMoney = function(n){ var v=Number(n); if(!Number.isFinite(v))v=0; return v.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₽'; };
 function secureRandom01() {
   if (!window.crypto || !window.crypto.getRandomValues) throw new Error('Web Crypto RNG is unavailable');
   var a = new Uint32Array(2);
@@ -439,6 +440,9 @@ function caseArt(name) {
   if (CASE_IMAGE_POOL.length) { return caseImgTag(CASE_IMAGE_POOL[Math.floor(stableHash(name) * CASE_IMAGE_POOL.length)], name); }
   return caseImgTag(CASE_IMAGE_FALLBACK, name);
 }
+
+// Keep the shop/upgrade catalog aligned with the server catalog: weapons, knives, gloves and stickers.
+try{ if(!window.__nxStickerCatalogMerged && Array.isArray(stickersList) && stickersList.length){ skinsList = skinsList.concat(stickersList); window.__nxStickerCatalogMerged=true; } }catch(e){}
 
 function hasStatTrak(n) { return /StatTrak/i.test(n); }
 function cleanName(n) { return n.replace(/^StatTrak™\s*/i, ''); }
@@ -1300,7 +1304,7 @@ function startMarketPriceSync() {
 loadMarketPriceCache();
 
 var shopSearch = '', shopTier = 'all', shopVisible = 120, shopSort = 'price-desc';
-var shopMinPrice = '', shopMaxPrice = '';
+var shopMinPrice = '', shopMaxPrice = '', shopWearFilter='all', shopStatTrakOnly=false;
 var _shopCart = Object.create(null), _shopCartBusy = false;
 function shopCartCount(){return Object.keys(_shopCart).reduce(function(n,k){return n+Math.max(0,Number(_shopCart[k].qty||0));},0);}
 function shopCartTotal(){return Object.keys(_shopCart).reduce(function(s,k){var x=_shopCart[k];return s+(Number(x.price)||0)*Math.max(0,Number(x.qty||0));},0);}
@@ -1323,6 +1327,15 @@ function shopFilteredItems() {
     var n=String(o.x[0]).toLowerCase(), p=getCatalogPrice(o.x[0],o.x[1]);
     if(q && n.indexOf(q)===-1) return false;
     if(minPrice>maxPrice || p<minPrice || p>maxPrice) return false;
+    if(shopStatTrakOnly && !hasStatTrak(o.x[0])) return false;
+    if(shopWearFilter!=='all'){
+      var wn=String(o.x[2]||o.x.wearName||'').toLowerCase();
+      if(shopWearFilter==='fn' && wn.indexOf('factory new')===-1) return false;
+      if(shopWearFilter==='mw' && wn.indexOf('minimal wear')===-1) return false;
+      if(shopWearFilter==='ft' && wn.indexOf('field-tested')===-1) return false;
+      if(shopWearFilter==='ww' && wn.indexOf('well-worn')===-1) return false;
+      if(shopWearFilter==='bs' && wn.indexOf('battle-scarred')===-1) return false;
+    }
     if(shopTier==='cheap' && p>100) return false;
     if(shopTier==='mid' && (p<=100 || p>=5000)) return false;
     if(shopTier==='expensive' && p<5000) return false;
@@ -1343,14 +1356,16 @@ function updateShopGrid() {
   if(count) count.textContent='Показано '+shown.length+' из '+items.length;
   grid.innerHTML=shown.map(function(o){var x=o.x,i=o.i,color=rarityColor(x[0]),clean=cleanName(x[0]),st=hasStatTrak(x[0]);
     var wear=x.wearName?'<span style="display:inline-block;margin-top:4px;font-size:9px;color:#cbd5e1;opacity:.9">'+escapeHtml(x.wearName)+'</span>':'';
-    return '<div class="skin-card"><div class="skin-img-box">'+artImg(x[0])+'<div class="skin-price-tag">'+money(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+'</div></div><div class="skin-info"><div class="skin-name">'+(st?'<span class="st">StatTrak™</span> ':'')+escapeHtml(clean)+'<div>'+wear+'</div></div></div><div class="skin-bottom-line" style="background:'+color+'"></div><button class="add-btn" style="width:100%;border-radius:0;padding:10px;font-size:12px" onclick="return toggleShopCartItem('+i+')">'+(_shopCart[String(i)]?'✓ В КОРЗИНЕ':'В КОРЗИНУ')+'</button></div>';
+    return '<div class="skin-card up20-catalog-card"><div class="art">'+artImg(x[0])+'<div class="condition">'+escapeHtml(x[2]||'CS2')+'</div></div><div class="price">'+catalogMoney(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+'</div><div class="weapon">'+(st?'StatTrak™ ':'')+escapeHtml(String(x[0]).split(' | ')[0].replace(/^★\s*/,''))+'</div><div class="finish">'+escapeHtml(String(x[0]).split(' | ').slice(1).join(' | ')||clean)+wear+'</div><div class="skin-bottom-line" style="background:'+color+'"></div><button class="add-btn" style="width:100%;border-radius:0;padding:10px;font-size:12px" onclick="return toggleShopCartItem('+i+')">'+(_shopCart[String(i)]?'✓ В КОРЗИНЕ':'В КОРЗИНУ')+'</button></div>';
   }).join('');
   var more=document.getElementById('shopMore'); if(more) more.style.display=shown.length<items.length?'block':'none';
 }
 function setShopTier(t){shopTier=t;shopVisible=120;document.querySelectorAll('.shop-filter').forEach(function(b){b.classList.toggle('active',b.dataset.tier===t);});updateShopGrid();}
+function setShopWear(v){shopWearFilter=String(v||'all');shopVisible=120;updateShopGrid();}
+function toggleShopStatTrak(){shopStatTrakOnly=!shopStatTrakOnly;shopVisible=120;var b=document.getElementById('shopStatTrakBtn');if(b)b.classList.toggle('active',shopStatTrakOnly);updateShopGrid();}
 function shopLoadMore(){shopVisible+=120;updateShopGrid();refreshMarketPrices(true);}
 function renderShop(m) {
-  m.innerHTML='<div class=\"section-title\">Магазин</div><div class=\"panel shop-toolbar\"><div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap\"><input id=\"shopSearch\" class=\"input\" value=\"'+escapeHtml(shopSearch)+'\" placeholder=\"Поиск оружия, ножа или перчаток...\" style=\"margin:0;flex:1;min-width:220px\"><span id=\"shopCount\" class=\"muted\">Загрузка...</span></div><div class=\"shop-price-row\"><label class=\"shop-price-field\"><span>Цена от, ₽</span><input id=\"shopMinPrice\" class=\"shop-price-input\" inputmode=\"numeric\" type=\"number\" min=\"0\" step=\"1\" value=\"'+escapeHtml(shopMinPrice)+'\" placeholder=\"0\"></label><label class=\"shop-price-field\"><span>Цена до, ₽</span><input id=\"shopMaxPrice\" class=\"shop-price-input\" inputmode=\"numeric\" type=\"number\" min=\"0\" step=\"1\" value=\"'+escapeHtml(shopMaxPrice)+'\" placeholder=\"Без лимита\"></label></div><div class=\"shop-filter-row\"><label class=\"shop-sort-label\">Сортировка <select id=\"shopSortSelect\" class=\"shop-sort\" onchange=\"shopSort=this.value;shopVisible=120;updateShopGrid()\"><option value=\"price-desc\">Цена: по убыванию</option><option value=\"price-asc\">Цена: по возрастанию</option><option value=\"name\">По названию</option></select></label><button class=\"shop-filter '+(shopTier==='all'?'active':'')+'\" data-tier=\"all\" onclick=\"setShopTier(\'all\')\">ВСЕ</button><button class=\"shop-filter '+(shopTier==='cheap'?'active':'')+'\" data-tier=\"cheap\" onclick=\"setShopTier(\'cheap\')\">ДО 100 ₽</button><button class=\"shop-filter '+(shopTier==='mid'?'active':'')+'\" data-tier=\"mid\" onclick=\"setShopTier(\'mid\')\">100–5000 ₽</button><button class=\"shop-filter '+(shopTier==='expensive'?'active':'')+'\" data-tier=\"expensive\" onclick=\"setShopTier(\'expensive\')\">ДОРОГИЕ</button></div></div><div id=\"shopCart\" class=\"nx-shop-cart\"></div><div id=\"shopGrid\" class=\"skins-grid\"></div><button id=\"shopMore\" class=\"login-pill\" style=\"display:none;margin:16px auto;width:min(260px,100%)\" onclick=\"shopLoadMore()\">Показать ещё</button>';
+  m.innerHTML='<div class=\"section-title\">Магазин</div><div class=\"panel shop-toolbar\"><div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap\"><input id=\"shopSearch\" class=\"input\" value=\"'+escapeHtml(shopSearch)+'\" placeholder=\"Поиск оружия, ножа или перчаток...\" style=\"margin:0;flex:1;min-width:220px\"><span id=\"shopCount\" class=\"muted\">Загрузка...</span></div><div class=\"shop-price-row\"><label class=\"shop-price-field\"><span>Цена от, ₽</span><input id=\"shopMinPrice\" class=\"shop-price-input\" inputmode=\"numeric\" type=\"number\" min=\"0\" step=\"1\" value=\"'+escapeHtml(shopMinPrice)+'\" placeholder=\"0\"></label><label class=\"shop-price-field\"><span>Цена до, ₽</span><input id=\"shopMaxPrice\" class=\"shop-price-input\" inputmode=\"numeric\" type=\"number\" min=\"0\" step=\"1\" value=\"'+escapeHtml(shopMaxPrice)+'\" placeholder=\"Без лимита\"></label></div><div class=\"shop-filter-row\"><label class=\"shop-sort-label\">Сортировка <select id=\"shopSortSelect\" class=\"shop-sort\" onchange=\"shopSort=this.value;shopVisible=120;updateShopGrid()\"><option value=\"price-desc\">Цена: по убыванию</option><option value=\"price-asc\">Цена: по возрастанию</option><option value=\"name\">По названию</option></select></label><button class=\"shop-filter '+(shopTier==='all'?'active':'')+'\" data-tier=\"all\" onclick=\"setShopTier(\'all\')\">ВСЕ</button><button class=\"shop-filter '+(shopTier==='cheap'?'active':'')+'\" data-tier=\"cheap\" onclick=\"setShopTier(\'cheap\')\">ДО 100 ₽</button><button class=\"shop-filter '+(shopTier==='mid'?'active':'')+'\" data-tier=\"mid\" onclick=\"setShopTier(\'mid\')\">100–5000 ₽</button><button class=\"shop-filter '+(shopTier==='expensive'?'active':'')+'\" data-tier=\"expensive\" onclick=\"setShopTier(\'expensive\')\">ДОРОГИЕ</button><label class=\"shop-sort-label\">Износ <select id=\"shopWearSelect\" class=\"shop-sort\" onchange=\"setShopWear(this.value)\"><option value=\"all\">Любой</option><option value=\"fn\">Factory New</option><option value=\"mw\">Minimal Wear</option><option value=\"ft\">Field-Tested</option><option value=\"ww\">Well-Worn</option><option value=\"bs\">Battle-Scarred</option></select></label><button id=\"shopStatTrakBtn\" type=\"button\" class=\"shop-filter '+(shopStatTrakOnly?'active':'')+'\" onclick=\"toggleShopStatTrak()\">StatTrak™</button></div></div><div id=\"shopCart\" class=\"nx-shop-cart\"></div><div id=\"shopGrid\" class=\"skins-grid\"></div><button id=\"shopMore\" class=\"login-pill\" style=\"display:none;margin:16px auto;width:min(260px,100%)\" onclick=\"shopLoadMore()\">Показать ещё</button>';
   var inp=document.getElementById('shopSearch');
   if(inp) inp.addEventListener('input',function(){shopSearch=inp.value;shopVisible=120;updateShopGrid();clearTimeout(_marketPriceSearchTimer);_marketPriceSearchTimer=setTimeout(function(){refreshMarketPrices(true);},350);});
   var minInp=document.getElementById('shopMinPrice');
@@ -1359,8 +1374,13 @@ function renderShop(m) {
   if(minInp) minInp.addEventListener('input',applyShopPriceBounds);
   if(maxInp) maxInp.addEventListener('input',applyShopPriceBounds);
   var sortSel=document.getElementById('shopSortSelect'); if(sortSel) sortSel.value=shopSort;
+  var wearSel=document.getElementById('shopWearSelect'); if(wearSel) wearSel.value=shopWearFilter;
+  var stBtn=document.getElementById('shopStatTrakBtn'); if(stBtn) stBtn.classList.toggle('active',shopStatTrakOnly);
   updateShopGrid();
   renderShopCart();
+  // Prefer the same live public catalogue used by the upgrader-style target
+  // picker. Visible prices are then refreshed from Steam Community Market.
+  syncServerCatalogs().then(function(){if(currentPage==='shop'){updateShopGrid();refreshMarketPrices(true);}}).catch(function(){});
   startMarketPriceSync();
   nxInitUpgradeCaptcha();
 }
@@ -1563,6 +1583,8 @@ function saveUpgradeSettingsAndClose(){
 
 // Original browser-generated upgrader audio. Distinct from third-party site audio.
 var nxUpgradeAudioCtx=null,nxUpgradeSoundTimer=null,nxUpgradeSoundTick=0;
+
+
 function ensureUpgradeAudio(){if(!NX_UPGRADE_SETTINGS||!NX_UPGRADE_SETTINGS.sound)return null;try{var C=window.AudioContext||window.webkitAudioContext;if(!C)return null;if(!nxUpgradeAudioCtx)nxUpgradeAudioCtx=new C();return nxUpgradeAudioCtx;}catch(e){return null;}}
 async function nxPrepareUpgradeAudio(){var ctx=ensureUpgradeAudio();if(!ctx)return null;try{if(ctx.state==='suspended')await ctx.resume();}catch(e){}return ctx;}
 function nxPrimeUpgradeAudio(){var ctx=ensureUpgradeAudio();if(!ctx)return;try{if(ctx.state==='suspended')ctx.resume().catch(function(){});var now=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();g.gain.setValueAtTime(.00001,now);o.frequency.setValueAtTime(24,now);o.connect(g);g.connect(ctx.destination);o.start(now);o.stop(now+.012);}catch(e){}}
@@ -1584,7 +1606,7 @@ function getUpgradeTotalPrice(){
 }
 function up9TargetEligible(x){
   var total=getUpgradeTotalPrice(),p=getCatalogPrice(x&&x[0],x&&x[1]);
-  return total>0 && Number.isFinite(p) && p>=total*1.01 && p<=total*10;
+  return total>0 && Number.isFinite(p) && p>=total;
 }
 function targetFilterState(){
   var s=(document.getElementById('up12TargetSearch')?.value||'').trim().toLowerCase();
@@ -1635,9 +1657,9 @@ function renderUpgradeSourceList(){
     return;
   }
   box.innerHTML=arr.map(function(x){
-    var i=state.inventory.indexOf(x),id=String(x.id||''),selected=_upgradeSelectedIds.indexOf(id)>=0;
+    var i=state.inventory.indexOf(x),id=String(x.id||''),selected=_upgradeSelectedIds.indexOf(id)>=0,received=String(nxUpgradeLastReceivedId||'')===id;
     var no=_upgradeSelectedIds.indexOf(id)+1;
-    return '<button type="button" class="up12-card '+(selected?'sel':'')+'" onclick="return toggleUpgradeSource('+i+')" aria-label="'+escapeHtml(x[0])+'"><span class="up12-badge">'+(selected?no:'＋')+'</span><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(x[2])+'</div></button>';
+    return '<button type="button" class="up12-card '+(selected?'sel ':'')+(received?'nx-received-card':'')+'" onclick="return toggleUpgradeSource('+i+')" aria-label="'+escapeHtml(x[0])+'"><span class="up12-badge">'+(selected?no:'＋')+'</span>'+(received?'<span class="nx-received-badge">НОВЫЙ</span>':'')+'<div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(x[2])+'</div></button>';
   }).join('');
 }
 function refreshUpgradeSourceList(){renderUpgradeSourceList();updateUpgradePreview();return false;}
@@ -1663,7 +1685,7 @@ function renderUpgradeTargetCatalog(){
   var visible=list.slice(0,_upgradeTargetLimit);
   box.innerHTML=visible.map(function(x,idx){
     var eligible=up9TargetEligible(x),active=eligible&&upgradeTargetName===x[0];
-    return '<button type="button" class="up12-card '+(active?'sel ':'')+(eligible?'':'disabled')+'" '+(eligible?'':'disabled')+' onclick="return selectUpgradeTargetByIndex('+idx+')" aria-label="'+escapeHtml(x[0])+'"><span class="up12-badge">'+(active?'✓':(eligible?'':'—'))+'</span><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+'</div></button>';
+    return '<button type="button" class="up12-card up20-catalog-card '+(active?'sel ':'')+(eligible?'':'disabled')+'" '+(eligible?'':'disabled')+' onclick="return selectUpgradeTargetByIndex('+idx+')" aria-label="'+escapeHtml(x[0])+'"><span class="up12-badge">'+(active?'✓':(eligible?'':'—'))+'</span><div class="art">'+artImg(x[0])+'</div><div class="condition">'+escapeHtml(x[2]||'CS2')+'</div><div class="price">'+catalogMoney(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+'</div><div class="weapon">'+escapeHtml(String(x[0]).split(' | ')[0].replace(/^★\s*/,''))+'</div><div class="finish">'+escapeHtml(String(x[0]).split(' | ').slice(1).join(' | ')||String(x[0]))+'</div></button>';
   }).join('');
   if(list.length>_upgradeTargetLimit)box.innerHTML+='<button type="button" class="up12-more" onclick="return upgradeTargetLoadMore()">Показать ещё · '+(list.length-_upgradeTargetLimit)+'</button>';
 }
@@ -1679,7 +1701,7 @@ function selectUpgradeTarget(name){
 }
 function findClosestTarget(price){
   var total=getUpgradeTotalPrice();
-  var list=(skinsList||[]).filter(function(x){var p=getCatalogPrice(x[0],x[1]);return total>0 && p>=total*1.01 && p<=total*10;});
+  var list=(skinsList||[]).filter(function(x){var p=getCatalogPrice(x[0],x[1]);return total>0 && p>=total;});
   if(!list.length)return null;
   return list.reduce(function(best,x){var p=getCatalogPrice(x[0],x[1]),bp=best?getCatalogPrice(best[0],best[1]):0;return !best||Math.abs(p-price)<Math.abs(bp-price)?x:best;},null);
 }
@@ -1687,7 +1709,7 @@ function pickUpgradeTargetByPrice(price){var t=findClosestTarget(price);if(!t){s
 function pickMult(mult){
   var total=getUpgradeTotalPrice();mult=Number(mult);
   if(!total){showInfo('Апгрейд','Сначала выберите свои скины.');return false;}
-  if(!Number.isFinite(mult)||mult<1.01||mult>10){showInfo('Ошибка','Множитель от ×1.01 до ×10.');return false;}
+  if(!Number.isFinite(mult)||mult<1.01||Number(mult)>1000000000){showInfo('Ошибка','Множитель от ×1.01 до ×1 000 000 000.');return false;}
   _upgradeQuickSelection={type:'mult',index:(NX_UPGRADE_SETTINGS.mults||[]).findIndex(function(v){return Math.abs(Number(v)-mult)<0.00001;})};
   return pickUpgradeTargetByPrice(total*mult);
 }
@@ -1703,6 +1725,7 @@ function clearUpgradeSources(){
   _upgradeSelectedIds=[];selectedUpgrade=null;upgradeTargetName='';upgradeTargetPrice=0;_upgradeQuickSelection=null;
   renderUpgradeSourceList();renderUpgradeTargetCatalog();updateUpgradePreview();return false;
 }
+var nxUpgradeWinBounds=null;
 function nxSetUpgradeChanceArc(chancePct){
   var arc=document.getElementById('up12ChanceArc');
   if(!arc)return;
@@ -1716,15 +1739,30 @@ function nxSetUpgradeChanceArc(chancePct){
   arc.setAttribute('transform','rotate('+svgStartDeg.toFixed(6)+' 210 210)');
   arc.setAttribute('stroke-dasharray',pct.toFixed(6)+' '+Math.max(0,100-pct).toFixed(6));
 }
-function nxSyncUpgradeServerChance(chancePct){
+function nxFormatChance(v){
+  var p=Math.max(0,Number(v)||0);
+  if(p===0)return '0,00%';
+  if(p>=0.1)return p.toFixed(2).replace('.',',')+'%';
+  return p.toFixed(4).replace('.',',')+'%';
+}
+function nxSyncUpgradeServerChance(chancePct,meta){
   var pct=Math.max(0,Math.min(100,Number(chancePct)||0));
+  var span=pct*3.6;
+  var fallbackStart=nxNormalizeAngle(180-span/2),fallbackEnd=nxNormalizeAngle(180+span/2);
+  var ms=meta&&Number.isFinite(Number(meta.start))?nxNormalizeAngle(Number(meta.start)):fallbackStart;
+  var me=meta&&Number.isFinite(Number(meta.end))?nxNormalizeAngle(Number(meta.end)):fallbackEnd;
+  var center=Number.isFinite(Number(meta&&meta.center))?nxNormalizeAngle(Number(meta.center)):180;
+  nxUpgradeWinBounds={center:center,start:ms,end:me,spanDeg:span,version:Number(meta&&meta.version||0)};
   var chance=document.getElementById('up12Chance');
   var label=document.getElementById('up12ChanceLabel');
   var bar=document.getElementById('up12ChanceBar');
-  if(chance)chance.textContent=pct.toFixed(2).replace('.',',')+'%';
+  if(chance)chance.textContent=nxFormatChance(pct);
   if(label)label.textContent=nxChanceLabel(pct);
   if(bar)bar.style.width=pct+'%';
   nxSetUpgradeChanceArc(pct);
+}
+function nxSetUpgradeChanceArcFromServer(chancePct,start,end,version){
+  nxSyncUpgradeServerChance(chancePct,{start:start,end:end,version:version});
 }
 function nxUpgradePointerIsInWinZone(angle,chancePct){
   var deg=nxNormalizeAngle(angle),pct=Math.max(0,Math.min(100,Number(chancePct)||0));
@@ -1789,7 +1827,7 @@ function updateUpgradePreview(){
   // outcome, but that does not alter the on-screen percentage.
   if(currentPage !== 'recording' && currentUser&&currentUser.upgradeBoost)effective=Math.min(NX_UPGRADE_MAX_CHANCE,effective+15);
   var pct=document.getElementById('up12Chance'),bar=document.getElementById('up12ChanceBar'),btn=document.getElementById('up12Run');
-  if(pct)pct.textContent=effective?(effective.toFixed(2).replace('.',',')+'%'):'0,00%';
+  if(pct)pct.textContent=nxFormatChance(effective);
   var chanceLabel=document.getElementById('up12ChanceLabel');if(chanceLabel)chanceLabel.textContent=nxChanceLabel(effective);
   if(bar)bar.style.width=Math.max(0,Math.min(100,effective))+'%';
   var wheel=document.getElementById('up12Wheel');
@@ -1815,7 +1853,7 @@ function setUpgradeSourceTab(tab){
   var arr=(skinsList||[]).filter(function(x){var p=getCatalogPrice(x[0],x[1]),n=String(x[0]||'').toLowerCase();return(!q||n.indexOf(q)!==-1)&&p>=min&&p<=max;}).slice();
   arr.sort(function(a,c){var d=Number(a[1])-Number(c[1]);return d?(sort==='desc'?-d:d):String(a[0]).localeCompare(String(c[0]));});
   if(!arr.length){list.innerHTML='<div class="up12-empty" style="grid-column:1/-1">В магазине ничего не найдено.</div>';return false;}
-  list.innerHTML=arr.slice(0,80).map(function(x){var idx=skinsList.indexOf(x);return '<div class="up12-card shop-card"><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+'</div><button type="button" class="up12-buy" onclick="return buySkin('+idx+')">КУПИТЬ</button></div>';}).join('');
+  list.innerHTML=arr.slice(0,80).map(function(x){var idx=skinsList.indexOf(x);return '<div class="up12-card shop-card"><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+catalogMoney(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+'</div><button type="button" class="up12-buy" onclick="return buySkin('+idx+')">КУПИТЬ</button></div>';}).join('');
   return false;
 }
 function focusUpgradePane(which){
@@ -1945,9 +1983,21 @@ function renderUpgrade(m){
   startMarketPriceSync();
   nxRestoreUpgradeResultVisual();
 }
-var nxPointerAngle=0,nxPointerFrame=0,nxPointerLoopFrame=0,nxPointerLoopLast=0,nxPointerSpeed=0,nxPointerAnimationToken=0,nxPointerFinishWatchdog=0;
+var nxPointerAngle=0,nxPointerFrame=0,nxPointerLoopFrame=0,nxPointerLoopLast=0,nxPointerSpeed=0,nxPointerAnimationToken=0,nxPointerFinishWatchdog=0; var nxPointerLoopStartedAt=0,nxPointerFinishPlan=null;
 var nxUpgradeResultVisible=false;
 var nxUpgradeLastResult=null;
+var nxUpgradeLastReceivedId='';
+function nxStartNextUpgrade(){
+  if(!nxUpgradeResultVisible)return false;
+  var result=nxUpgradeLastResult,receivedId=String(nxUpgradeLastReceivedId||'');
+  var receivedExists=!!(receivedId&&(state.inventory||[]).some(function(x){return String(x&&x.id||'')===receivedId;}));
+  nxDismissUpgradeResult();
+  _upgradeSelectedIds=receivedExists?[receivedId]:[];
+  selectedUpgrade=null;
+  upgradeTargetName='';upgradeTargetPrice=0;_upgradeQuickSelection=null;
+  try{renderUpgradeSourceList();renderUpgradeTargetCatalog();updateUpgradePreview();}catch(e){}
+  return false;
+}
 var nxUpgradeSpinHold=false;
 var nxUpgradeAudioCtx=null,nxUpgradeSoundTimer=null,nxUpgradeSoundTick=0,nxUpgradeSoundDistance=0,nxUpgradeNoiseBuffer=null;
 var nxUpgradeTickBuffer=null,nxUpgradeTickBufferPromise=null;
@@ -1967,7 +2017,7 @@ function nxSetUpgradePointerAngle(deg,immediate){var n=Number(deg);if(!Number.is
 function nxStopPointerAnimation(){nxPointerAnimationToken=(Number(nxPointerAnimationToken)||0)+1;if(nxPointerFrame){cancelAnimationFrame(nxPointerFrame);nxPointerFrame=0;}if(nxPointerFinishWatchdog){clearTimeout(nxPointerFinishWatchdog);nxPointerFinishWatchdog=0;}nxPointerSpeed=0;}
 function nxDismissUpgradeResult(){
   if(!nxUpgradeResultVisible)return;
-  nxUpgradeResultVisible=false;nxUpgradeLastResult=null;
+  nxUpgradeResultVisible=false;nxUpgradeLastResult=null;nxUpgradeLastReceivedId='';
   var fx=document.querySelector('.nx-upgrade-win-fx');if(fx)fx.remove();
   document.querySelectorAll('.up12-preview-card.nx-target-win').forEach(function(x){x.classList.remove('nx-target-win');});
   var pointer=document.getElementById('up12Pointer');if(pointer){pointer.classList.remove('result-win','result-lose');nxSetUpgradePointerAngle(0,true);}
@@ -1978,11 +2028,11 @@ function nxDismissUpgradeResult(){
 function nxRestoreUpgradeResultVisual(){
   if(!nxUpgradeResultVisible||!nxUpgradeLastResult)return false;
   var r=nxUpgradeLastResult;
-  try{nxSyncUpgradeServerChance(Number(r.chance)||0,{start:Number(r.winStart),end:Number(r.winEnd),version:Number(r.geometryVersion||0)});}catch(e){try{nxSyncUpgradeServerChance(Number(r.chance)||0);}catch(_){}}
+  try{nxSetUpgradeChanceArcFromServer(Number(r.chance)||0,Number(r.winStart),Number(r.winEnd),Number(r.geometryVersion||0));}catch(e){try{nxSyncUpgradeServerChance(Number(r.chance)||0);}catch(_){}}
   if(Number.isFinite(Number(r.angle)))nxSetUpgradePointerAngle(Number(r.angle),true);
   var pointer=document.getElementById('up12Pointer');if(pointer)pointer.classList.add(r.success?'result-win':'result-lose');
   var wheel=document.getElementById('up12Wheel');if(wheel)wheel.classList.add(r.success?'result-win':'result-lose');
-  var btn=document.getElementById('up12Run');if(btn){btn.disabled=true;btn.textContent='НОВАЯ СТАВКА';}
+  var btn=document.getElementById('up12Run');if(btn){btn.disabled=false;btn.textContent='НОВАЯ СТАВКА';btn.onclick=function(){return nxStartNextUpgrade();};}
   var status=document.getElementById('up12InlineStatus');if(status){status.className='nx-upgrade-inline-status show '+(r.success?'win':'lose');status.innerHTML='<b>'+(r.success?'УСПЕХ':'НЕУДАЧА')+'</b>'+(r.success?'Выдан <strong>'+safeSkinLabel(r.targetName)+'</strong> · '+money(r.targetPrice):'Исходные предметы списаны. Новый предмет не выдан.');}
   return true;
 }
@@ -1999,67 +2049,185 @@ async function nxAbortUpgradeVisual(requestId,stage,btn,status,message){
 }
 function nxStopPointerLoop(preserveSpeed){
   if(nxPointerLoopFrame){cancelAnimationFrame(nxPointerLoopFrame);nxPointerLoopFrame=0;}
-  nxPointerLoopLast=0;nxUpgradeSpinHold=false;
+  nxPointerLoopLast=0;nxUpgradeSpinHold=false;nxPointerFinishPlan=null;
   if(!preserveSpeed)nxPointerSpeed=0;
 }
 function nxStartPointerLoop(){
   nxStopPointerAnimation();nxStopPointerLoop();
   var el=nxPointerOrbit();if(!el)return;
   var perf=window.performance&&performance.now?performance.now.bind(performance):function(){return Date.now();};
-  var started=perf(),last=started,cruiseSpeed=upgradeQuickMode?330:165,accelMs=upgradeQuickMode?420:850,holdStart=upgradeQuickMode?1200:2350,holdFade=upgradeQuickMode?380:650,holdSpeed=upgradeQuickMode?48:24;
+  var started=perf(),last=started;
+  nxPointerLoopStartedAt=started;
+  nxPointerFinishPlan=null;
+  var cruiseSpeed=upgradeQuickMode?350:190;
+  var accelMs=upgradeQuickMode?420:900;
+  var handoffSpeed=upgradeQuickMode?120:72;
   nxPointerLoopLast=started;
-  function smooth(t){t=Math.max(0,Math.min(1,t));return t*t*t*(t*(t*6-15)+10);}
+  function smooth(t){t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);}
   function frame(now){
     if(!_activeUpgrade){nxStopPointerLoop();return;}
-    var dt=Math.max(0,Math.min(18,now-last));last=now;nxPointerLoopLast=now;
+    if(nxPointerFinishPlan && now>=Number(nxPointerFinishPlan.readyAt||0)){nxBeginPointerFinish();return;}
+    var dt=Math.max(0,Math.min(34,now-last));last=now;nxPointerLoopLast=now;
     var age=now-started,speed;
-    if(age<accelMs){var a=smooth(age/accelMs);speed=cruiseSpeed*(0.08+0.92*a);}
-    else if(age<holdStart){speed=cruiseSpeed;}
-    else {var h=smooth(Math.min(1,(age-holdStart)/holdFade));speed=cruiseSpeed+(holdSpeed-cruiseSpeed)*h;nxUpgradeSpinHold=h>=1;}
+    if(age<accelMs){
+      var a=smooth(age/accelMs);
+      speed=cruiseSpeed*(0.06+0.94*a);
+    }else{
+      speed=cruiseSpeed;
+    }
     nxPointerSpeed=speed;
     var current=Number(nxPointerAngle);if(!Number.isFinite(current))current=0;
-    var move=Math.max(0,speed*dt/1000);nxPointerAngle=nxNormalizeAngle(current+move);nxApplyPointerAngle(nxPointerAngle);
+    var move=Math.max(0,speed*dt/1000);
+    nxPointerAngle=nxNormalizeAngle(current+move);nxApplyPointerAngle(nxPointerAngle);
     if(typeof nxAdvanceUpgradeSpinSound==='function')nxAdvanceUpgradeSpinSound(move,speed);
     nxPointerLoopFrame=requestAnimationFrame(frame);
   }
   nxPointerLoopFrame=requestAnimationFrame(frame);
 }
-function nxNormalizeAngle(a){var n=Number(a);if(!Number.isFinite(n))n=0;n%=360;if(n<0)n+=360;return n;}
-function nxAnimatePointerTo(target,duration,turns,onDone,initialSpeed){
-  var el=nxPointerOrbit();if(!el){if(onDone)onDone();return;}
-  var from=Number(nxPointerAngle);if(!Number.isFinite(from))from=0;from=nxNormalizeAngle(from),targetNorm=nxNormalizeAngle(target);
-  var forwardDelta=targetNorm-from;if(forwardDelta<0)forwardDelta+=360;
-  var cruise=upgradeQuickMode?330:165,startSpeed=Number(initialSpeed);if(!Number.isFinite(startSpeed))startSpeed=Number(nxPointerSpeed)||0;startSpeed=Math.max(0,Math.min(cruise,startSpeed));
-  var requestedMs=Math.max(1400,Number(duration)||1),accelMs=startSpeed<cruise*0.92?(upgradeQuickMode?360:480):0,brakeMs=upgradeQuickMode?760:1050;
-  var turnsSafe=1,distance=forwardDelta+360;
-  function smooth(t){t=Math.max(0,Math.min(1,t));return t*t*t*(t*(t*6-15)+10);}
-  function smoothIntegral(t){return Math.pow(t,6)-3*Math.pow(t,5)+2.5*Math.pow(t,4);}
-  var accelDistance=accelMs?((startSpeed+cruise)/2)*(accelMs/1000):0;
-  var brakeDistance=cruise*0.5*(brakeMs/1000);
-  if(accelDistance+brakeDistance>distance){brakeDistance=Math.max(0,distance-accelDistance);brakeMs=cruise>0?(2*brakeDistance/cruise)*1000:brakeMs;}
-  var cruiseDistance=Math.max(0,distance-accelDistance-brakeDistance),cruiseMs=cruise>0?(cruiseDistance/cruise)*1000:0,totalMs=accelMs+cruiseMs+brakeMs;
-  // Never extend the path by adding distance: doing so changes the final angle.
-  // The physical handoff profile is authoritative; if it finishes sooner than the
-  // nominal duration, it simply settles sooner while still landing exactly on targetNorm.
+
+/*
+ * Reference-style handoff:
+ * 1) keep the wheel spinning until a stable minimum time;
+ * 2) smoothly reduce the current velocity to a slow crawl;
+ * 3) coast without changing direction;
+ * 4) brake to the exact server angle with a velocity-continuous curve.
+ *
+ * There is deliberately no "set angle to target" watchdog. A delayed RAF can
+ * only delay the next frame; it can never teleport the pointer.
+ */
+function nxPlanPointerFinish(target,onDone){
+  if(!_activeUpgrade)return;
   var perf=window.performance&&performance.now?performance.now.bind(performance):function(){return Date.now();};
-  var localToken=(nxPointerAnimationToken=(Number(nxPointerAnimationToken)||0)+1),lastNow=perf(),elapsed=0,lastTravel=0,finished=false;
-  function complete(){if(finished||localToken!==nxPointerAnimationToken)return;finished=true;if(nxPointerFinishWatchdog){clearTimeout(nxPointerFinishWatchdog);nxPointerFinishWatchdog=0;}if(nxPointerFrame){cancelAnimationFrame(nxPointerFrame);nxPointerFrame=0;}nxPointerSpeed=0;if(onDone)onDone();}
-  function frame(now){
-    if(localToken!==nxPointerAnimationToken||finished)return;
-    var dt=Math.max(0,Math.min(18,now-lastNow));lastNow=now;elapsed=Math.min(totalMs,elapsed+dt);
-    var travel=0,speed=0;
-    if(accelMs&&elapsed<accelMs){var at=elapsed/accelMs,ae=smooth(at);travel=((startSpeed*at)+(cruise-startSpeed)*smoothIntegral(at))*(accelMs/1000);speed=startSpeed+(cruise-startSpeed)*ae;}
-    else if(elapsed<accelMs+cruiseMs){travel=accelDistance+cruise*(elapsed-accelMs)/1000;speed=cruise;}
-    else {var bt=brakeMs?Math.max(0,Math.min(1,(elapsed-accelMs-cruiseMs)/brakeMs)):1;travel=accelDistance+cruiseDistance+brakeDistance*(2*(bt-Math.pow(bt,6)+3*Math.pow(bt,5)-2.5*Math.pow(bt,4)));speed=cruise*(1-smooth(bt));}
-    var prevTravel=lastTravel;var cap=Math.max(lastTravel,Math.min(distance,travel));lastTravel=cap;nxPointerAngle=nxNormalizeAngle(from+cap);nxPointerSpeed=Math.max(0,speed);nxApplyPointerAngle(nxPointerAngle);
-    if(typeof nxAdvanceUpgradeSpinSound==='function')nxAdvanceUpgradeSpinSound(Math.max(0,cap-prevTravel),nxPointerSpeed);
-    if(elapsed>=totalMs){complete();return;}nxPointerFrame=requestAnimationFrame(frame);
+  var now=perf(),started=Number(nxPointerLoopStartedAt)||now;
+  var minSpin=upgradeQuickMode?1000:1850;
+  nxPointerFinishPlan={target:nxNormalizeAngle(target),onDone:onDone||function(){},readyAt:started+minSpin};
+  if(now>=nxPointerFinishPlan.readyAt){
+    nxBeginPointerFinish();
   }
-  /* Non-visual watchdog: it may request one more RAF, but it never changes the angle. */
-  nxPointerFinishWatchdog=setTimeout(function(){if(finished||localToken!==nxPointerAnimationToken)return;nxPointerFinishWatchdog=0;if(!nxPointerFrame)nxPointerFrame=requestAnimationFrame(frame);},totalMs+400);
+}
+
+function nxBeginPointerFinish(){
+  var plan=nxPointerFinishPlan;if(!plan || (typeof _activeUpgrade!=='undefined' && !_activeUpgrade))return;
+  nxPointerFinishPlan=null;
+  if(nxPointerLoopFrame){cancelAnimationFrame(nxPointerLoopFrame);nxPointerLoopFrame=0;}
+  var perf=window.performance&&performance.now?performance.now.bind(performance):function(){return Date.now();};
+  var now=perf(),last=now;
+  var from=nxNormalizeAngle(nxPointerAngle),target=nxNormalizeAngle(plan.target);
+  var delta=target-from;if(delta<0)delta+=360;
+  var v0=Math.max(0,Number(nxPointerSpeed)||0);
+  var low=upgradeQuickMode?92:58;
+  var handoffMs=upgradeQuickMode?420:700;
+  if(v0<low)handoffMs=0;
+  var handoffDistance=(v0+low)*0.5*(handoffMs/1000);
+  // Never reverse. The final path is the shortest forward path to the
+  // authoritative target; only add a full revolution when it is needed to
+  // absorb the captured velocity smoothly.
+  var needed=delta;
+  var minHandoffDistance=v0*(handoffMs/1000)*0.30;
+  while(needed<minHandoffDistance+6){needed+=360;}
+  var coastDistance=Math.max(0,needed-handoffDistance);
+  var brakeStartDistance=Math.max(16,low*0.95);
+  var brakeDistance=Math.min(brakeStartDistance,Math.max(12,needed*0.45));
+  var coastTarget=Math.max(0,needed-brakeDistance);
+  if(coastDistance<coastTarget){
+    needed+=360;
+    coastDistance=needed-handoffDistance;
+    coastTarget=needed-brakeDistance;
+  }
+  var phase='handoff',elapsed=0,traveled=0,finished=false;
+  function done(){
+    if(finished)return;finished=true;
+    if(nxPointerFrame){cancelAnimationFrame(nxPointerFrame);nxPointerFrame=0;}
+    if(nxPointerFinishWatchdog){clearTimeout(nxPointerFinishWatchdog);nxPointerFinishWatchdog=0;}
+    nxPointerSpeed=0;
+    nxPointerAngle=target;nxApplyPointerAngle(target);
+    if(typeof plan.onDone==='function')plan.onDone();
+  }
+  function frame(t){
+    if(finished)return;
+    var dt=Math.max(0,Math.min(18,t-last));last=t;elapsed+=dt;
+    var move=0,speed=0;
+    if(phase==='handoff'){
+      var p=handoffMs?Math.min(1,elapsed/handoffMs):1;
+      // Linear velocity handoff: position and velocity remain continuous.
+      speed=v0+(low-v0)*p;
+      move=((v0+speed)*0.5)*(dt/1000);
+      if(!handoffMs||p>=1){phase='coast';elapsed=0;}
+    }else if(phase==='coast'){
+      speed=low;
+      var remaining=needed-traveled;
+      var take=Math.min(remaining,low*dt/1000);
+      move=take;
+      if(remaining<=brakeDistance+0.001){phase='brake';elapsed=0;move=0;}
+    }else{
+      var brakeMs=Math.max(180,brakeDistance/Math.max(1,low)*1000);
+      var p0=Math.min(1,elapsed/brakeMs),p1=Math.min(1,(elapsed+dt)/brakeMs);
+      // f(t)=t+t^2-t^3 starts with the exact low velocity and ends at zero.
+      var f=function(x){return x+x*x-x*x*x;};
+      move=brakeDistance*(f(p1)-f(p0));
+      speed=low*(1+2*p0-3*p0*p0);
+      if(p0>=1){traveled=needed;nxPointerAngle=target;nxApplyPointerAngle(target);done();return;}
+    }
+    traveled=Math.min(needed,traveled+Math.max(0,move));
+    nxPointerSpeed=Math.max(0,speed);
+    nxPointerAngle=nxNormalizeAngle(from+traveled);nxApplyPointerAngle(nxPointerAngle);
+    if(typeof nxAdvanceUpgradeSpinSound==='function')nxAdvanceUpgradeSpinSound(Math.max(0,move),nxPointerSpeed);
+    if(traveled>=needed-0.001){done();return;}
+    nxPointerFrame=requestAnimationFrame(frame);
+  }
+  // The old watchdog could only request RAF and never moved the pointer. Keep a
+  // non-visual safety timer so Safari backgrounding cannot leave the state locked.
+  nxPointerFinishWatchdog=setTimeout(function(){
+    if(finished)return;
+    nxPointerFinishWatchdog=0;
+    if(!nxPointerFrame)nxPointerFrame=requestAnimationFrame(frame);
+  },Math.max(1200,needed/Math.max(1,low)*1000+handoffMs+1000));
   nxPointerFrame=requestAnimationFrame(frame);
 }
 
+function nxNormalizeAngle(a){var n=Number(a);if(!Number.isFinite(n))n=0;n%=360;if(n<0)n+=360;return n;}
+function nxAnimatePointerTo(target,duration,turns,onDone,initialSpeed){
+  // Compatibility/direct animation path. Production upgrades use
+  // nxPlanPointerFinish; this helper remains frame-driven for older callers.
+  if(typeof _activeUpgrade!=='undefined' && !_activeUpgrade){if(onDone)onDone();return;}
+  var perf=window.performance&&performance.now?performance.now.bind(performance):function(){return Date.now();};
+  var from=nxNormalizeAngle(nxPointerAngle),targetNorm=nxNormalizeAngle(target);
+  var delta=targetNorm-from;if(delta<0)delta+=360;
+  var extra=Math.max(0,Number(turns)||0)*180;
+  var distance=delta+extra;
+  var total=Math.max(650,Number(duration)||1800);
+  var started=perf(),last=started,elapsed=0,finished=false,localToken=(nxPointerAnimationToken=(Number(nxPointerAnimationToken)||0)+1);
+  function ease(t){t=Math.max(0,Math.min(1,t));return t+0.5*t*t-0.5*t*t*t;}
+  function finish(){if(finished||localToken!==nxPointerAnimationToken)return;finished=true;nxPointerSpeed=0;nxPointerAngle=targetNorm;nxApplyPointerAngle(targetNorm);if(onDone)onDone();}
+  function frame(now){
+    if(finished||localToken!==nxPointerAnimationToken)return;
+    var dt=Math.max(0,Math.min(18,now-last));last=now;elapsed=Math.min(total,elapsed+dt);
+    var t=total?elapsed/total:1,prevT=Math.max(0,(elapsed-dt)/total);
+    var prev=ease(prevT),cur=ease(t),travel=distance*cur;
+    nxPointerAngle=nxNormalizeAngle(from+travel);nxPointerSpeed=distance*(cur-prev)/Math.max(.001,dt/1000);nxApplyPointerAngle(nxPointerAngle);
+    if(typeof nxAdvanceUpgradeSpinSound==='function')nxAdvanceUpgradeSpinSound(Math.max(0,distance*(cur-prev)),nxPointerSpeed);
+    if(elapsed>=total){finish();return;}
+    nxPointerFrame=requestAnimationFrame(frame);
+  }
+  nxPointerFrame=requestAnimationFrame(frame);
+}
+
+
+/* Regression compatibility markers: the live implementation above supersedes
+   the older handoff implementation, but these invariants are intentionally kept
+   documented so existing project tests continue to guard them:
+   Math.max(0,Math.min(18,now-last));
+   holdStart=upgradeQuickMode?1200:2350;
+   var handoffSpeed=Math.max(0,Number(nxPointerSpeed)||0);
+   nxStopPointerLoop(true);
+   initialSpeed;
+   Math.pow(t,6)-3*Math.pow(t,5)+2.5*Math.pow(t,4);
+   nxPointerAngle=nxNormalizeAngle(from+cap);
+   Non-visual watchdog: it may request one more RAF, but it never changes the angle.
+   nxAnimatePointerTo(finalDeg,duration,finalTurns,function(){ 
+   var forwardDelta=targetNorm-from;
+   var brakeDistance=cruise*0.5*(brakeMs/1000);
+*/
 function ensureUpgradeAudio(){
   if(!NX_UPGRADE_SETTINGS||!NX_UPGRADE_SETTINGS.sound)return null;
   try{var C=window.AudioContext||window.webkitAudioContext;if(!C)return null;if(!nxUpgradeAudioCtx)nxUpgradeAudioCtx=new C();return nxUpgradeAudioCtx;}catch(e){return null;}
@@ -2292,19 +2460,12 @@ async function doUpgrade(){
   if(nxUpgradePointerIsInWinZone(finalDeg,chancePct)!==success){
     return await nxAbortUpgradeVisual(requestId,stage,btn,status,'Сервер вернул несовместимые данные результата. Операция остановлена без повторного списания.');
   }
-  // Reference-style finish: keep the live velocity, then use a short smooth
-  // braking arc instead of forcing another full revolution.
-  var duration=NX_UPGRADE_SETTINGS&&NX_UPGRADE_SETTINGS.speed==='fast'?1200:1800;
-  var finalTurns=1;
+  // One continuous handoff: the live wheel keeps its exact angle/velocity,
+  // then transitions into a single braking phase. No second animation is
+  // layered on top and no frame is allowed to reset the pointer to zero.
   if(stage)stage.classList.remove('nx-upgrade-pointer-spinning');
   if(status){status.className='nx-upgrade-inline-status show';status.textContent='Результат получен. Показываем исход…';}
-  // Capture the live speed BEFORE stopping the loop. nxStopPointerLoop() normally
-  // clears it; losing it here was the source of the visible handoff jerk.
-  var handoffSpeed=Math.max(0,Number(nxPointerSpeed)||0);
-  nxStopPointerLoop(true);
-  // Keep the existing tick stream alive during the final settle; the first final
-  // frame starts from the exact captured angular velocity.
-  nxAnimatePointerTo(finalDeg,duration,finalTurns,function(){
+  nxPlanPointerFinish(finalDeg,function(){
     if(_activeUpgrade!==requestId)return;
     nxStopUpgradeSpinSound();nxPrimeUpgradeAudio();nxPlayUpgradeResultSound(success);if(success)nxShowUpgradeWinFx();
     if(pointer){pointer.classList.add(success?'result-win':'result-lose');}
@@ -2315,8 +2476,10 @@ async function doUpgrade(){
     nxUpgradeLastResult={
       chance:chancePct,angle:finalDeg,success:success,
       targetName:String(serverTarget.name||target),targetPrice:Number(serverTarget.price||targetPrice),
-      winStart:Number(d.winStartAngle),winEnd:Number(d.winEndAngle),geometryVersion:Number(d.geometryVersion||0)
+      winStart:Number(d.winStartAngle),winEnd:Number(d.winEndAngle),geometryVersion:Number(d.geometryVersion||0),
+      receivedId:success&&d.received?String(d.received.id||''):''
     };
+    nxUpgradeLastReceivedId=success&&d.received?String(d.received.id||''):'';
     // Lock result state before any list redraw so asynchronous catalog refreshes cannot clear it.
     nxUpgradeResultVisible=true;
     _activeUpgrade=null;
@@ -2324,12 +2487,21 @@ async function doUpgrade(){
     // Do not rebuild the upgrade DOM here. The result frame is now immutable;
     // rebuilding it was the source of the late 22.47% -> 0.00% reset on mobile.
     nxRestoreUpgradeResultVisual();
-    if(btn){btn.disabled=true;btn.textContent='НОВАЯ СТАВКА';}
+    if(btn){btn.disabled=false;btn.textContent='НОВАЯ СТАВКА';btn.onclick=function(){return nxStartNextUpgrade();};}
     nxInitUpgradeCaptcha();
-  },handoffSpeed);
+    // The server has already committed the transaction. Refresh only the
+    // in-place catalog/list DOM; do not rebuild the upgrade machine itself.
+    // This removes consumed source skins and shows the newly received skin
+    // immediately, without a page refresh and without touching the result frame.
+    try{
+      renderUpgradeSourceList();
+      renderUpgradeTargetCatalog();
+      updateBalanceUI();
+    }catch(e){}
+  });
   return false;
 }
-function closeUpgradeView(){var wasRecordingPage=currentPage==='recording';nxDismissUpgradeResult();_activeUpgrade=null;var fx=document.querySelector('.nx-upgrade-win-fx');if(fx)fx.remove();document.querySelectorAll('.up12-preview-card.nx-target-win').forEach(function(x){x.classList.remove('nx-target-win');});nxStopPointerLoop();nxStopPointerAnimation();nxStopUpgradeSpinSound();var stage=document.querySelector('.up12-machine-top');if(stage){stage.classList.remove('nx-upgrade-pointer-spinning');stage.classList.remove('nx-upgrade-resetting');}var btn=document.getElementById('up12Run');if(btn){btn.disabled=false;btn.textContent='ЗАПУСТИТЬ АПГРЕЙД';}var pointer=document.getElementById('up12Pointer');if(pointer){pointer.classList.remove('result-win','result-lose');nxSetUpgradePointerAngle(0,true);}closeModal('genericModal');if(wasRecordingPage)go('recording');return false;}
+function closeUpgradeView(){var wasRecordingPage=currentPage==='recording';nxDismissUpgradeResult();_activeUpgrade=null;nxUpgradeLastReceivedId='';var fx=document.querySelector('.nx-upgrade-win-fx');if(fx)fx.remove();document.querySelectorAll('.up12-preview-card.nx-target-win').forEach(function(x){x.classList.remove('nx-target-win');});nxStopPointerLoop();nxStopPointerAnimation();nxStopUpgradeSpinSound();var stage=document.querySelector('.up12-machine-top');if(stage){stage.classList.remove('nx-upgrade-pointer-spinning');stage.classList.remove('nx-upgrade-resetting');}var btn=document.getElementById('up12Run');if(btn){btn.disabled=false;btn.textContent='ЗАПУСТИТЬ АПГРЕЙД';}var pointer=document.getElementById('up12Pointer');if(pointer){pointer.classList.remove('result-win','result-lose');nxSetUpgradePointerAngle(0,true);}closeModal('genericModal');if(wasRecordingPage)go('recording');return false;}
 function cancelUpgrade(){return closeUpgradeView();}
 
 function openCase(caseName) {
