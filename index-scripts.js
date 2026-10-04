@@ -135,7 +135,7 @@ async function checkWorker() {
   try {
     var r=await fetch(apiUrl('/health'),{method:'GET',cache:'no-store'});
     var d=await r.json().catch(function(){return{};});
-    var ok=r.ok && d && d.ok===true && Number(d.version||0)>=NX_REQUIRED_WORKER_VERSION;
+    var ok=r.ok && d && d.ok===true && Number(d.version||0)>=20;
     if(dot) dot.style.background=ok?'#4ade80':'#ef4444';
     el.style.color=ok?'#4ade80':'#f87171';
     el.style.borderColor=ok?'rgba(74,222,128,.25)':'rgba(239,68,68,.25)';
@@ -150,8 +150,6 @@ async function checkWorker() {
   }
 }
 
-var NX_REQUIRED_WORKER_VERSION = 70;
-var NX_REQUIRED_PROTOCOL_VERSION = 14;
 var currentPage = 'upgrade', leaderTab = 'balance', adminTab = 'players';
 var currentEvent = null, selectedUpgrade = null;
 var currentUser = null;
@@ -262,26 +260,15 @@ function catalogPrice(item) {
 function mergeExtendedCatalog() {
   if (CATALOG_EXTENDED) return;
   CATALOG_EXTENDED = true;
-  // Remote catalogs are used for art only. Refresh only the relevant lists; do
-  // not rebuild the upgrade machine while it is spinning or showing a result.
-  if (currentPage === 'shop') {
-    go('shop');
-  } else if (currentPage === 'upgrade' && !_activeUpgrade && !nxUpgradeResultVisible) {
-    try { renderUpgradeSourceList(); renderUpgradeTargetCatalog(); updateUpgradePreview(); } catch(e) {}
-  }
+  // Remote catalogs are used for art only. Do not append unknown items to skinsList:
+  // the Worker is authoritative for prices/upgrade targets.
+  if (currentPage === 'shop' || currentPage === 'upgrade') go(currentPage);
 }
 Promise.allSettled([
   loadSkinImageData('https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins.json', SKIN_IMAGES, REMOTE_SKIN_ITEMS),
   loadSkinImageData('https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/gloves.json', GLOVE_IMAGES, REMOTE_GLOVE_ITEMS),
   loadSkinImageData('https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/stickers.json', SKIN_IMAGES, null)
-]).then(function(){
-  mergeExtendedCatalog();
-  if (currentPage === 'shop') {
-    go('shop');
-  } else if (currentPage === 'upgrade' && !_activeUpgrade && !nxUpgradeResultVisible) {
-    try { renderUpgradeSourceList(); renderUpgradeTargetCatalog(); updateUpgradePreview(); } catch(e) {}
-  }
-}).catch(function(e){ console.warn(e); });
+]).then(function(){ mergeExtendedCatalog(); if (currentPage) go(currentPage); }).catch(function(e){ console.warn(e); });
 
 function indexCaseData(c) {
   if (!c || !c.name || !c.image) return;
@@ -295,14 +282,10 @@ function normalizeCaseKey(name) {
 }
 fetch('https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/crates.json', { cache: 'force-cache' }).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }).then(function(data){
   data.forEach(indexCaseData);
-  if (currentPage === 'shop') go('shop');
-  else if (currentPage === 'upgrade' && !_activeUpgrade && !nxUpgradeResultVisible) {
-    try { renderUpgradeTargetCatalog(); } catch(e) {}
-  }
+  if (currentPage) go(currentPage);
 }).catch(function(e){ console.warn('Не удалось загрузить изображения кейсов', e); });
 
 const money = function(n){ return Math.round(n).toLocaleString('ru-RU') + ' ₽'; };
-const catalogMoney = function(n){ var v=Number(n); if(!Number.isFinite(v))v=0; return v.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₽'; };
 function secureRandom01() {
   if (!window.crypto || !window.crypto.getRandomValues) throw new Error('Web Crypto RNG is unavailable');
   var a = new Uint32Array(2);
@@ -321,11 +304,7 @@ var _onlineSid = (function(){
 
 async function pingOnline() {
   try {
-    var r = await fetch(apiUrl('/api/heartbeat'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sid: _onlineSid, token: authToken || '' })
-    });
+    var r = await fetch(apiUrl('/api/heartbeat'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid: _onlineSid }) });
     var d = await r.json();
     if (d.ok && typeof d.online === 'number') {
       var el = document.getElementById('onlineCount');
@@ -335,7 +314,7 @@ async function pingOnline() {
 }
 handleSteamCallback().catch(function(){});
 pingOnline();
-setInterval(pingOnline, 45000);
+setInterval(pingOnline, 90000);
 
 function procModel(name) {
   var n = String(name);
@@ -440,9 +419,6 @@ function caseArt(name) {
   if (CASE_IMAGE_POOL.length) { return caseImgTag(CASE_IMAGE_POOL[Math.floor(stableHash(name) * CASE_IMAGE_POOL.length)], name); }
   return caseImgTag(CASE_IMAGE_FALLBACK, name);
 }
-
-// Keep the shop/upgrade catalog aligned with the server catalog: weapons, knives, gloves and stickers.
-try{ if(!window.__nxStickerCatalogMerged && Array.isArray(stickersList) && stickersList.length){ skinsList = skinsList.concat(stickersList); window.__nxStickerCatalogMerged=true; } }catch(e){}
 
 function hasStatTrak(n) { return /StatTrak/i.test(n); }
 function cleanName(n) { return n.replace(/^StatTrak™\s*/i, ''); }
@@ -1060,11 +1036,6 @@ function setupNav(active) {
 
 async function go(page) {
   if (page === 'cases') page = 'upgrade';
-  // Never rebuild the upgrade DOM while an operation is running or its result
-  // is locked on screen. Async catalog/price/player refreshes may finish at
-  // exactly the same moment as the wheel, and a full render would reset the
-  // pointer/chance UI (the mobile 22.47% -> 0.00% bug).
-  if (page === 'upgrade' && currentPage === 'upgrade' && (document.getElementById('up12Wheel') || _activeUpgrade || nxUpgradeResultVisible === true)) return false;
   if (page === 'withdraw') { openWithdrawBetaNotice(); return; }
   if (page === 'recording' && !(currentUser && currentUser.recordingAccess) && !isAdminUI) {
     _recordingUpgrade = false;
@@ -1182,21 +1153,19 @@ function startEventTimer() {
 
 var marketPriceOverrides = Object.create(null);
 var marketPriceMeta = Object.create(null);
+var lisCatalogPriceLocked = Object.create(null);
+var lisCatalogSource = 'fallback';
 var marketPriceSyncRunning = false;
 var marketPriceBatchSize = 20;
 var MARKET_PRICE_CLIENT_TTL = 60 * 1000;
-try{
-  localStorage.removeItem('nexusdrop_steam_prices_v3');
-  localStorage.removeItem('nexus_public_cache_v2:skins-v59');
-  localStorage.removeItem('nexus_public_cache_v2:public-bootstrap-v59');
-}catch(e){}
 var MARKET_PRICE_POLL_MS = 60 * 1000;
 var _marketPricePollTimer = null;
 var _marketPriceSearchTimer = null;
 
 function getCatalogPrice(name, fallback) {
   var key=String(name || '').trim().toLowerCase();
-    var p=Number(marketPriceOverrides[String(name||'')]);
+  if(lisCatalogPriceLocked[key])return Math.max(0,Math.round(Number(fallback||0)));
+  var p=Number(marketPriceOverrides[String(name||'')]);
   return Number.isFinite(p)&&p>0?Math.round(p):Math.max(0,Math.round(Number(fallback||0)));
 }
 function marketSourceBadge(name) {
@@ -1206,7 +1175,7 @@ function marketSourceBadge(name) {
 
 function loadMarketPriceCache() {
   try {
-    var raw=JSON.parse(localStorage.getItem('nexusdrop_steam_prices_v4')||'{}');
+    var raw=JSON.parse(localStorage.getItem('nexusdrop_steam_prices_v3')||'{}');
     if(!raw||typeof raw!=='object')return;
     Object.keys(raw).forEach(function(k){
       var v=raw[k];
@@ -1224,7 +1193,7 @@ function saveMarketPriceCache() {
       var meta=marketPriceMeta[k]||{};
       out[k]={price:marketPriceOverrides[k],fetchedAt:Number(meta.fetchedAt||Date.now()),matchedName:meta.matchedName||'',source:meta.source||'Steam Community Market'};
     });
-    localStorage.setItem('nexusdrop_steam_prices_v4',JSON.stringify(out));
+    localStorage.setItem('nexusdrop_steam_prices_v3',JSON.stringify(out));
   } catch(e) {}
 }
 async function fetchMarketPriceBatch(names, forceRefresh) {
@@ -1251,7 +1220,7 @@ function getMarketRefreshNames() {
   if(currentPage==='shop') {
     var filtered=[];
     try{filtered=shopFilteredItems();}catch(e){}
-    names=filtered.slice(0,20).map(function(o){return o.x[0];});
+    names=filtered.filter(function(o){return !lisCatalogPriceLocked[String(o.x[0]||'').toLowerCase()];}).slice(0,20).map(function(o){return o.x[0];});
   } else if(currentPage==='upgrade') {
     var target=String(upgradeTargetName||'').trim();
     if(target)names.push(target);
@@ -1278,15 +1247,8 @@ async function refreshMarketPrices(forceRefresh) {
       updateShopGrid();
       restoreNexusScroll(y);
     } else if(currentPage==='upgrade') {
-      // Keep the finished upgrade frame immutable until the player explicitly
-      // starts a new bet. Market refreshes may update the catalog behind it,
-      // but must not touch the wheel/result DOM.
-      if(nxUpgradeResultVisible && !_activeUpgrade){
-        nxRestoreUpgradeResultVisual();
-      }else{
-        renderUpgradeTargetCatalog();
-        updateUpgradePreview();
-      }
+      renderUpgradeTargetCatalog();
+      updateUpgradePreview();
       restoreNexusScroll(y);
     }
   } finally {
@@ -1304,7 +1266,7 @@ function startMarketPriceSync() {
 loadMarketPriceCache();
 
 var shopSearch = '', shopTier = 'all', shopVisible = 120, shopSort = 'price-desc';
-var shopMinPrice = '', shopMaxPrice = '', shopWearFilter='all', shopStatTrakOnly=false;
+var shopMinPrice = '', shopMaxPrice = '';
 var _shopCart = Object.create(null), _shopCartBusy = false;
 function shopCartCount(){return Object.keys(_shopCart).reduce(function(n,k){return n+Math.max(0,Number(_shopCart[k].qty||0));},0);}
 function shopCartTotal(){return Object.keys(_shopCart).reduce(function(s,k){var x=_shopCart[k];return s+(Number(x.price)||0)*Math.max(0,Number(x.qty||0));},0);}
@@ -1312,8 +1274,8 @@ function toggleShopCartItem(i){i=Number(i);var item=skinsList[i];if(!item)return
 function changeShopCartQty(key,delta){var x=_shopCart[String(key)];if(!x)return false;x.qty=Math.max(1,Math.min(20,Number(x.qty||1)+Number(delta||0)));renderShopCart();return false;}
 function removeShopCartItem(key){delete _shopCart[String(key)];renderShopCart();updateShopGrid();return false;}
 function clearShopCart(){_shopCart=Object.create(null);renderShopCart();updateShopGrid();return false;}
-function renderShopCart(){var box=document.getElementById('shopCart');if(!box)return;var count=shopCartCount(),total=shopCartTotal();if(!count){box.innerHTML='<div class="nx-shop-cart-info"><b>Корзина пуста</b><span>Добавьте несколько предметов и оформите покупку одной операцией.</span></div>';return;}var rows=Object.keys(_shopCart).map(function(k){var x=_shopCart[k];return '<div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)"><div style="width:42px;height:36px;flex:0 0 42px">'+artImg(x.name)+'</div><div style="min-width:0;flex:1"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px">'+safeSkinLabel(x.name)+'</b><span style="font-size:9px;color:#ffd400">'+money(x.price)+'</span></div><button class="nx-cart-btn" onclick="return changeShopCartQty(\''+k+'\',-1)">−</button><b style="font-size:10px">'+x.qty+'</b><button class="nx-cart-btn" onclick="return changeShopCartQty(\''+k+'\',1)">+</button><button class="nx-cart-btn" onclick="return removeShopCartItem(\''+k+'\')">×</button></div>';}).join('');box.innerHTML='<details open><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px"><div class="nx-shop-cart-info"><b>🛒 Корзина · '+count+'</b><span>'+money(total)+' · '+Object.keys(_shopCart).length+' позиции</span></div><div class="nx-shop-cart-actions"><button type="button" class="nx-cart-btn" onclick="event.preventDefault();return clearShopCart()">Очистить</button><button type="button" class="nx-cart-btn primary" onclick="event.preventDefault();return buyShopCart()">КУПИТЬ ВСЁ</button></div></summary><div style="margin-top:7px">'+rows+'</div></details>';}
-async function buyShopCart(){if(_shopCartBusy)return false;if(!currentUser)return showInfo('Вход','Сначала войдите в аккаунт.');var entries=Object.values(_shopCart).filter(function(x){return x&&Number(x.qty)>0;});if(!entries.length)return false;var names=[];entries.forEach(function(x){for(var i=0;i<Math.min(50,Math.max(0,Number(x.qty)||0));i++)names.push(String(x.name||''));});if(!names.length)return false;var shownTotal=entries.reduce(function(s,x){return s+Number(x.price||0)*Number(x.qty||0);},0);showSellConfirm('Покупка из корзины','Предметов: <b>'+names.length+'</b><br><span style="color:#ffd166">Итого по каталогу: '+money(shownTotal)+'</span>',async function(){_shopCartBusy=true;try{var requestId='cart_batch_'+Date.now()+'_'+Math.floor(secureRandom01()*1e12);var r=await fetch(apiUrl('/api/shop/buy-batch'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken,skinNames:names,requestId:requestId}),cache:'no-store'});var d=await readJsonResponse(r);if(!r.ok||!d.ok){showInfo('Корзина',d.error||('HTTP '+r.status+' · покупка не выполнена.'));return;}if(d.user)applyUser(d.user);clearShopCart();var total=Number(d.total||shownTotal),purchased=Number(d.purchased||names.length);showInfo('Готово','Куплено предметов: '+purchased+'<br>Списано: '+money(total));}catch(e){showInfo('Корзина','Сервер недоступен.');}finally{_shopCartBusy=false;renderShopCart();updateShopGrid();}});return false;}
+function renderShopCart(){var box=document.getElementById('shopCart');if(!box)return;var count=shopCartCount(),total=shopCartTotal();if(!count){box.innerHTML='<div class="nx-shop-cart-info"><b>Корзина пуста</b><span>Добавьте несколько предметов и оформите покупку одной операцией.</span></div>';return;}var rows=Object.keys(_shopCart).map(function(k){var x=_shopCart[k];return '<div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)"><div style="width:42px;height:36px;flex:0 0 42px">'+artImg(x.name)+'</div><div style="min-width:0;flex:1"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px">'+safeSkinLabel(x.name)+'</b><span style="font-size:9px;color:#ffd400">'+money(x.price)+' ₽</span></div><button class="nx-cart-btn" onclick="return changeShopCartQty(\''+k+'\',-1)">−</button><b style="font-size:10px">'+x.qty+'</b><button class="nx-cart-btn" onclick="return changeShopCartQty(\''+k+'\',1)">+</button><button class="nx-cart-btn" onclick="return removeShopCartItem(\''+k+'\')">×</button></div>';}).join('');box.innerHTML='<details open><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px"><div class="nx-shop-cart-info"><b>🛒 Корзина · '+count+'</b><span>'+money(total)+' ₽ · '+Object.keys(_shopCart).length+' позиции</span></div><div class="nx-shop-cart-actions"><button type="button" class="nx-cart-btn" onclick="event.preventDefault();return clearShopCart()">Очистить</button><button type="button" class="nx-cart-btn primary" onclick="event.preventDefault();return buyShopCart()">КУПИТЬ ВСЁ</button></div></summary><div style="margin-top:7px">'+rows+'</div></details>';}
+async function buyShopCart(){if(_shopCartBusy)return false;if(!currentUser)return showInfo('Вход','Сначала войдите в аккаунт.');var entries=Object.values(_shopCart).filter(function(x){return x&&Number(x.qty)>0;});if(!entries.length)return false;var names=[];entries.forEach(function(x){for(var i=0;i<Math.min(50,Math.max(0,Number(x.qty)||0));i++)names.push(String(x.name||''));});if(!names.length)return false;var shownTotal=entries.reduce(function(s,x){return s+Number(x.price||0)*Number(x.qty||0);},0);showSellConfirm('Покупка из корзины','Предметов: <b>'+names.length+'</b><br><span style="color:#ffd166">Итого по каталогу: '+money(shownTotal)+' ₽</span>',async function(){_shopCartBusy=true;try{var requestId='cart_batch_'+Date.now()+'_'+Math.floor(secureRandom01()*1e12);var r=await fetch(apiUrl('/api/shop/buy-batch'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken,skinNames:names,requestId:requestId}),cache:'no-store'});var d=await readJsonResponse(r);if(!r.ok||!d.ok){showInfo('Корзина',d.error||('HTTP '+r.status+' · покупка не выполнена.'));return;}if(d.user)applyUser(d.user);clearShopCart();var total=Number(d.total||shownTotal),purchased=Number(d.purchased||names.length);showInfo('Готово','Куплено предметов: '+purchased+'<br>Списано: '+money(total)+' ₽');}catch(e){showInfo('Корзина','Сервер недоступен.');}finally{_shopCartBusy=false;renderShopCart();updateShopGrid();}});return false;}
 
 function shopFilteredItems() {
   var q=shopSearch.toLowerCase().trim();
@@ -1327,15 +1289,6 @@ function shopFilteredItems() {
     var n=String(o.x[0]).toLowerCase(), p=getCatalogPrice(o.x[0],o.x[1]);
     if(q && n.indexOf(q)===-1) return false;
     if(minPrice>maxPrice || p<minPrice || p>maxPrice) return false;
-    if(shopStatTrakOnly && !hasStatTrak(o.x[0])) return false;
-    if(shopWearFilter!=='all'){
-      var wn=String(o.x[2]||o.x.wearName||'').toLowerCase();
-      if(shopWearFilter==='fn' && wn.indexOf('factory new')===-1) return false;
-      if(shopWearFilter==='mw' && wn.indexOf('minimal wear')===-1) return false;
-      if(shopWearFilter==='ft' && wn.indexOf('field-tested')===-1) return false;
-      if(shopWearFilter==='ww' && wn.indexOf('well-worn')===-1) return false;
-      if(shopWearFilter==='bs' && wn.indexOf('battle-scarred')===-1) return false;
-    }
     if(shopTier==='cheap' && p>100) return false;
     if(shopTier==='mid' && (p<=100 || p>=5000)) return false;
     if(shopTier==='expensive' && p<5000) return false;
@@ -1356,16 +1309,14 @@ function updateShopGrid() {
   if(count) count.textContent='Показано '+shown.length+' из '+items.length;
   grid.innerHTML=shown.map(function(o){var x=o.x,i=o.i,color=rarityColor(x[0]),clean=cleanName(x[0]),st=hasStatTrak(x[0]);
     var wear=x.wearName?'<span style="display:inline-block;margin-top:4px;font-size:9px;color:#cbd5e1;opacity:.9">'+escapeHtml(x.wearName)+'</span>':'';
-    return '<div class="skin-card up20-catalog-card"><div class="art">'+artImg(x[0])+'<div class="condition">'+escapeHtml(x[2]||'CS2')+'</div></div><div class="price">'+catalogMoney(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+'</div><div class="weapon">'+(st?'StatTrak™ ':'')+escapeHtml(String(x[0]).split(' | ')[0].replace(/^★\s*/,''))+'</div><div class="finish">'+escapeHtml(String(x[0]).split(' | ').slice(1).join(' | ')||clean)+wear+'</div><div class="skin-bottom-line" style="background:'+color+'"></div><button class="add-btn" style="width:100%;border-radius:0;padding:10px;font-size:12px" onclick="return toggleShopCartItem('+i+')">'+(_shopCart[String(i)]?'✓ В КОРЗИНЕ':'В КОРЗИНУ')+'</button></div>';
+    return '<div class="skin-card"><div class="skin-img-box">'+artImg(x[0])+'<div class="skin-price-tag">'+money(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+'</div></div><div class="skin-info"><div class="skin-name">'+(st?'<span class="st">StatTrak™</span> ':'')+escapeHtml(clean)+'<div>'+wear+'</div></div></div><div class="skin-bottom-line" style="background:'+color+'"></div><button class="add-btn" style="width:100%;border-radius:0;padding:10px;font-size:12px" onclick="return toggleShopCartItem('+i+')">'+(_shopCart[String(i)]?'✓ В КОРЗИНЕ':'В КОРЗИНУ')+'</button></div>';
   }).join('');
   var more=document.getElementById('shopMore'); if(more) more.style.display=shown.length<items.length?'block':'none';
 }
 function setShopTier(t){shopTier=t;shopVisible=120;document.querySelectorAll('.shop-filter').forEach(function(b){b.classList.toggle('active',b.dataset.tier===t);});updateShopGrid();}
-function setShopWear(v){shopWearFilter=String(v||'all');shopVisible=120;updateShopGrid();}
-function toggleShopStatTrak(){shopStatTrakOnly=!shopStatTrakOnly;shopVisible=120;var b=document.getElementById('shopStatTrakBtn');if(b)b.classList.toggle('active',shopStatTrakOnly);updateShopGrid();}
 function shopLoadMore(){shopVisible+=120;updateShopGrid();refreshMarketPrices(true);}
 function renderShop(m) {
-  m.innerHTML='<div class=\"section-title\">Магазин</div><div class=\"panel shop-toolbar\"><div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap\"><input id=\"shopSearch\" class=\"input\" value=\"'+escapeHtml(shopSearch)+'\" placeholder=\"Поиск оружия, ножа или перчаток...\" style=\"margin:0;flex:1;min-width:220px\"><span id=\"shopCount\" class=\"muted\">Загрузка...</span></div><div class=\"shop-price-row\"><label class=\"shop-price-field\"><span>Цена от, ₽</span><input id=\"shopMinPrice\" class=\"shop-price-input\" inputmode=\"numeric\" type=\"number\" min=\"0\" step=\"1\" value=\"'+escapeHtml(shopMinPrice)+'\" placeholder=\"0\"></label><label class=\"shop-price-field\"><span>Цена до, ₽</span><input id=\"shopMaxPrice\" class=\"shop-price-input\" inputmode=\"numeric\" type=\"number\" min=\"0\" step=\"1\" value=\"'+escapeHtml(shopMaxPrice)+'\" placeholder=\"Без лимита\"></label></div><div class=\"shop-filter-row\"><label class=\"shop-sort-label\">Сортировка <select id=\"shopSortSelect\" class=\"shop-sort\" onchange=\"shopSort=this.value;shopVisible=120;updateShopGrid()\"><option value=\"price-desc\">Цена: по убыванию</option><option value=\"price-asc\">Цена: по возрастанию</option><option value=\"name\">По названию</option></select></label><button class=\"shop-filter '+(shopTier==='all'?'active':'')+'\" data-tier=\"all\" onclick=\"setShopTier(\'all\')\">ВСЕ</button><button class=\"shop-filter '+(shopTier==='cheap'?'active':'')+'\" data-tier=\"cheap\" onclick=\"setShopTier(\'cheap\')\">ДО 100 ₽</button><button class=\"shop-filter '+(shopTier==='mid'?'active':'')+'\" data-tier=\"mid\" onclick=\"setShopTier(\'mid\')\">100–5000 ₽</button><button class=\"shop-filter '+(shopTier==='expensive'?'active':'')+'\" data-tier=\"expensive\" onclick=\"setShopTier(\'expensive\')\">ДОРОГИЕ</button><label class=\"shop-sort-label\">Износ <select id=\"shopWearSelect\" class=\"shop-sort\" onchange=\"setShopWear(this.value)\"><option value=\"all\">Любой</option><option value=\"fn\">Factory New</option><option value=\"mw\">Minimal Wear</option><option value=\"ft\">Field-Tested</option><option value=\"ww\">Well-Worn</option><option value=\"bs\">Battle-Scarred</option></select></label><button id=\"shopStatTrakBtn\" type=\"button\" class=\"shop-filter '+(shopStatTrakOnly?'active':'')+'\" onclick=\"toggleShopStatTrak()\">StatTrak™</button></div></div><div id=\"shopCart\" class=\"nx-shop-cart\"></div><div id=\"shopGrid\" class=\"skins-grid\"></div><button id=\"shopMore\" class=\"login-pill\" style=\"display:none;margin:16px auto;width:min(260px,100%)\" onclick=\"shopLoadMore()\">Показать ещё</button>';
+  m.innerHTML='<div class=\"section-title\">Магазин</div><div class=\"panel shop-toolbar\"><div style=\"display:flex;gap:8px;align-items:center;flex-wrap:wrap\"><input id=\"shopSearch\" class=\"input\" value=\"'+escapeHtml(shopSearch)+'\" placeholder=\"Поиск оружия, ножа или перчаток...\" style=\"margin:0;flex:1;min-width:220px\"><span id=\"shopCount\" class=\"muted\">Загрузка...</span></div><div class=\"shop-price-row\"><label class=\"shop-price-field\"><span>Цена от, ₽</span><input id=\"shopMinPrice\" class=\"shop-price-input\" inputmode=\"numeric\" type=\"number\" min=\"0\" step=\"1\" value=\"'+escapeHtml(shopMinPrice)+'\" placeholder=\"0\"></label><label class=\"shop-price-field\"><span>Цена до, ₽</span><input id=\"shopMaxPrice\" class=\"shop-price-input\" inputmode=\"numeric\" type=\"number\" min=\"0\" step=\"1\" value=\"'+escapeHtml(shopMaxPrice)+'\" placeholder=\"Без лимита\"></label></div><div class=\"shop-filter-row\"><label class=\"shop-sort-label\">Сортировка <select id=\"shopSortSelect\" class=\"shop-sort\" onchange=\"shopSort=this.value;shopVisible=120;updateShopGrid()\"><option value=\"price-desc\">Цена: по убыванию</option><option value=\"price-asc\">Цена: по возрастанию</option><option value=\"name\">По названию</option></select></label><button class=\"shop-filter '+(shopTier==='all'?'active':'')+'\" data-tier=\"all\" onclick=\"setShopTier(\'all\')\">ВСЕ</button><button class=\"shop-filter '+(shopTier==='cheap'?'active':'')+'\" data-tier=\"cheap\" onclick=\"setShopTier(\'cheap\')\">ДО 100 ₽</button><button class=\"shop-filter '+(shopTier==='mid'?'active':'')+'\" data-tier=\"mid\" onclick=\"setShopTier(\'mid\')\">100–5000 ₽</button><button class=\"shop-filter '+(shopTier==='expensive'?'active':'')+'\" data-tier=\"expensive\" onclick=\"setShopTier(\'expensive\')\">ДОРОГИЕ</button></div></div><div id=\"shopCart\" class=\"nx-shop-cart\"></div><div id=\"shopGrid\" class=\"skins-grid\"></div><button id=\"shopMore\" class=\"login-pill\" style=\"display:none;margin:16px auto;width:min(260px,100%)\" onclick=\"shopLoadMore()\">Показать ещё</button>';
   var inp=document.getElementById('shopSearch');
   if(inp) inp.addEventListener('input',function(){shopSearch=inp.value;shopVisible=120;updateShopGrid();clearTimeout(_marketPriceSearchTimer);_marketPriceSearchTimer=setTimeout(function(){refreshMarketPrices(true);},350);});
   var minInp=document.getElementById('shopMinPrice');
@@ -1374,13 +1325,8 @@ function renderShop(m) {
   if(minInp) minInp.addEventListener('input',applyShopPriceBounds);
   if(maxInp) maxInp.addEventListener('input',applyShopPriceBounds);
   var sortSel=document.getElementById('shopSortSelect'); if(sortSel) sortSel.value=shopSort;
-  var wearSel=document.getElementById('shopWearSelect'); if(wearSel) wearSel.value=shopWearFilter;
-  var stBtn=document.getElementById('shopStatTrakBtn'); if(stBtn) stBtn.classList.toggle('active',shopStatTrakOnly);
   updateShopGrid();
   renderShopCart();
-  // Prefer the same live public catalogue used by the upgrader-style target
-  // picker. Visible prices are then refreshed from Steam Community Market.
-  syncServerCatalogs().then(function(){if(currentPage==='shop'){updateShopGrid();refreshMarketPrices(true);}}).catch(function(){});
   startMarketPriceSync();
   nxInitUpgradeCaptcha();
 }
@@ -1462,8 +1408,6 @@ var _upgradeQuickSelection=null;
 
 
 // === NEXUSDROP UPGRADE SETTINGS V36 ===
-var NX_UPGRADE_RETURN_RATE = 0.9;
-var NX_UPGRADE_MAX_CHANCE = 90;
 var NX_UPGRADE_SETTINGS_KEY = 'nexus_upgrade_settings_v1';
 var NX_UPGRADE_DEFAULTS = {mults:[2,4,8], pcts:[35,55,75], sound:true, speed:'normal'};
 var NX_UPGRADE_SETTINGS = null;
@@ -1583,8 +1527,6 @@ function saveUpgradeSettingsAndClose(){
 
 // Original browser-generated upgrader audio. Distinct from third-party site audio.
 var nxUpgradeAudioCtx=null,nxUpgradeSoundTimer=null,nxUpgradeSoundTick=0;
-
-
 function ensureUpgradeAudio(){if(!NX_UPGRADE_SETTINGS||!NX_UPGRADE_SETTINGS.sound)return null;try{var C=window.AudioContext||window.webkitAudioContext;if(!C)return null;if(!nxUpgradeAudioCtx)nxUpgradeAudioCtx=new C();return nxUpgradeAudioCtx;}catch(e){return null;}}
 async function nxPrepareUpgradeAudio(){var ctx=ensureUpgradeAudio();if(!ctx)return null;try{if(ctx.state==='suspended')await ctx.resume();}catch(e){}return ctx;}
 function nxPrimeUpgradeAudio(){var ctx=ensureUpgradeAudio();if(!ctx)return;try{if(ctx.state==='suspended')ctx.resume().catch(function(){});var now=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();g.gain.setValueAtTime(.00001,now);o.frequency.setValueAtTime(24,now);o.connect(g);g.connect(ctx.destination);o.start(now);o.stop(now+.012);}catch(e){}}
@@ -1606,7 +1548,7 @@ function getUpgradeTotalPrice(){
 }
 function up9TargetEligible(x){
   var total=getUpgradeTotalPrice(),p=getCatalogPrice(x&&x[0],x&&x[1]);
-  return total>0 && Number.isFinite(p) && p>=total;
+  return total>0 && Number.isFinite(p) && p>=total*1.01 && p<=total*10;
 }
 function targetFilterState(){
   var s=(document.getElementById('up12TargetSearch')?.value||'').trim().toLowerCase();
@@ -1621,7 +1563,6 @@ function up12TargetMatches(x,st){
   return (!st.search||n.indexOf(st.search)!==-1)&&p>=st.min&&p<=st.max;
 }
 function toggleUpgradeSource(i){
-  nxDismissUpgradeResult();
   i=Number(i);
   var item=(state.inventory||[])[i];
   if(!item||!item.id)return false;
@@ -1657,9 +1598,9 @@ function renderUpgradeSourceList(){
     return;
   }
   box.innerHTML=arr.map(function(x){
-    var i=state.inventory.indexOf(x),id=String(x.id||''),selected=_upgradeSelectedIds.indexOf(id)>=0,received=String(nxUpgradeLastReceivedId||'')===id;
+    var i=state.inventory.indexOf(x),id=String(x.id||''),selected=_upgradeSelectedIds.indexOf(id)>=0;
     var no=_upgradeSelectedIds.indexOf(id)+1;
-    return '<button type="button" class="up12-card '+(selected?'sel ':'')+(received?'nx-received-card':'')+'" onclick="return toggleUpgradeSource('+i+')" aria-label="'+escapeHtml(x[0])+'"><span class="up12-badge">'+(selected?no:'＋')+'</span>'+(received?'<span class="nx-received-badge">НОВЫЙ</span>':'')+'<div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(x[2])+'</div></button>';
+    return '<button type="button" class="up12-card '+(selected?'sel':'')+'" onclick="return toggleUpgradeSource('+i+')" aria-label="'+escapeHtml(x[0])+'"><span class="up12-badge">'+(selected?no:'＋')+'</span><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(x[2])+' ₽</div></button>';
   }).join('');
 }
 function refreshUpgradeSourceList(){renderUpgradeSourceList();updateUpgradePreview();return false;}
@@ -1680,12 +1621,12 @@ function renderUpgradeTargetCatalog(){
     return d?(st.sort==='desc'?-d:d):String(a[0]).localeCompare(String(b[0]));
   });
   _upgradeTargetFiltered=list;
-  if(count)count.textContent=(total?('Ставка '+money(total)+' · '):'')+list.length+' найдено';
+  if(count)count.textContent=(total?('Ставка '+money(total)+' ₽ · '):'')+list.length+' найдено';
   if(!list.length){box.innerHTML='<div class="up12-empty" style="grid-column:1/-1">По заданным фильтрам ничего не найдено.</div>';return;}
   var visible=list.slice(0,_upgradeTargetLimit);
   box.innerHTML=visible.map(function(x,idx){
     var eligible=up9TargetEligible(x),active=eligible&&upgradeTargetName===x[0];
-    return '<button type="button" class="up12-card up20-catalog-card '+(active?'sel ':'')+(eligible?'':'disabled')+'" '+(eligible?'':'disabled')+' onclick="return selectUpgradeTargetByIndex('+idx+')" aria-label="'+escapeHtml(x[0])+'"><span class="up12-badge">'+(active?'✓':(eligible?'':'—'))+'</span><div class="art">'+artImg(x[0])+'</div><div class="condition">'+escapeHtml(x[2]||'CS2')+'</div><div class="price">'+catalogMoney(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+'</div><div class="weapon">'+escapeHtml(String(x[0]).split(' | ')[0].replace(/^★\s*/,''))+'</div><div class="finish">'+escapeHtml(String(x[0]).split(' | ').slice(1).join(' | ')||String(x[0]))+'</div></button>';
+    return '<button type="button" class="up12-card '+(active?'sel ':'')+(eligible?'':'disabled')+'" '+(eligible?'':'disabled')+' onclick="return selectUpgradeTargetByIndex('+idx+')" aria-label="'+escapeHtml(x[0])+'"><span class="up12-badge">'+(active?'✓':(eligible?'':'—'))+'</span><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+' ₽</div></button>';
   }).join('');
   if(list.length>_upgradeTargetLimit)box.innerHTML+='<button type="button" class="up12-more" onclick="return upgradeTargetLoadMore()">Показать ещё · '+(list.length-_upgradeTargetLimit)+'</button>';
 }
@@ -1693,7 +1634,6 @@ function upgradeTargetLoadMore(){_upgradeTargetLimit=Math.min(_upgradeTargetLimi
 function filterUpgradeTargets(){_upgradeTargetLimit=80;renderUpgradeTargetCatalog();updateUpgradePreview();return false;}
 function selectUpgradeTargetByIndex(i){var x=_upgradeTargetFiltered[Number(i)];if(!x)return false;return selectUpgradeTarget(String(x[0]));}
 function selectUpgradeTarget(name){
-  nxDismissUpgradeResult();
   var x=(skinsList||[]).find(function(s){return s[0]===name;});if(!x)return false;
   if(!up9TargetEligible(x)){showInfo('Цель недоступна','Желаемый скин должен стоить минимум на 1% дороже общей ставки.');return false;}
   upgradeTargetName=String(x[0]);upgradeTargetPrice=getCatalogPrice(x[0],x[1]);selectedUpgrade=null;_upgradeQuickSelection=null;
@@ -1701,7 +1641,7 @@ function selectUpgradeTarget(name){
 }
 function findClosestTarget(price){
   var total=getUpgradeTotalPrice();
-  var list=(skinsList||[]).filter(function(x){var p=getCatalogPrice(x[0],x[1]);return total>0 && p>=total;});
+  var list=(skinsList||[]).filter(function(x){var p=getCatalogPrice(x[0],x[1]);return total>0 && p>=total*1.01 && p<=total*10;});
   if(!list.length)return null;
   return list.reduce(function(best,x){var p=getCatalogPrice(x[0],x[1]),bp=best?getCatalogPrice(best[0],best[1]):0;return !best||Math.abs(p-price)<Math.abs(bp-price)?x:best;},null);
 }
@@ -1709,7 +1649,7 @@ function pickUpgradeTargetByPrice(price){var t=findClosestTarget(price);if(!t){s
 function pickMult(mult){
   var total=getUpgradeTotalPrice();mult=Number(mult);
   if(!total){showInfo('Апгрейд','Сначала выберите свои скины.');return false;}
-  if(!Number.isFinite(mult)||mult<1.01||Number(mult)>1000000000){showInfo('Ошибка','Множитель от ×1.01 до ×1 000 000 000.');return false;}
+  if(!Number.isFinite(mult)||mult<1.01||mult>10){showInfo('Ошибка','Множитель от ×1.01 до ×10.');return false;}
   _upgradeQuickSelection={type:'mult',index:(NX_UPGRADE_SETTINGS.mults||[]).findIndex(function(v){return Math.abs(Number(v)-mult)<0.00001;})};
   return pickUpgradeTargetByPrice(total*mult);
 }
@@ -1718,14 +1658,12 @@ function pickPct(pct){
   if(!total){showInfo('Апгрейд','Сначала выберите свои скины.');return false;}
   if(!Number.isFinite(pct)||pct<0.1||pct>75){showInfo('Ошибка','Шанс от 0.1% до 75%.');return false;}
   _upgradeQuickSelection={type:'pct',index:(NX_UPGRADE_SETTINGS.pcts||[]).findIndex(function(v){return Math.abs(Number(v)-pct)<0.00001;})};
-  return pickUpgradeTargetByPrice(total*(NX_UPGRADE_RETURN_RATE/(pct/100)));
+  return pickUpgradeTargetByPrice(total/(pct/100));
 }
 function clearUpgradeSources(){
-  nxDismissUpgradeResult();
   _upgradeSelectedIds=[];selectedUpgrade=null;upgradeTargetName='';upgradeTargetPrice=0;_upgradeQuickSelection=null;
   renderUpgradeSourceList();renderUpgradeTargetCatalog();updateUpgradePreview();return false;
 }
-var nxUpgradeWinBounds=null;
 function nxSetUpgradeChanceArc(chancePct){
   var arc=document.getElementById('up12ChanceArc');
   if(!arc)return;
@@ -1739,30 +1677,15 @@ function nxSetUpgradeChanceArc(chancePct){
   arc.setAttribute('transform','rotate('+svgStartDeg.toFixed(6)+' 210 210)');
   arc.setAttribute('stroke-dasharray',pct.toFixed(6)+' '+Math.max(0,100-pct).toFixed(6));
 }
-function nxFormatChance(v){
-  var p=Math.max(0,Number(v)||0);
-  if(p===0)return '0,00%';
-  if(p>=0.1)return p.toFixed(2).replace('.',',')+'%';
-  return p.toFixed(4).replace('.',',')+'%';
-}
-function nxSyncUpgradeServerChance(chancePct,meta){
+function nxSyncUpgradeServerChance(chancePct){
   var pct=Math.max(0,Math.min(100,Number(chancePct)||0));
-  var span=pct*3.6;
-  var fallbackStart=nxNormalizeAngle(180-span/2),fallbackEnd=nxNormalizeAngle(180+span/2);
-  var ms=meta&&Number.isFinite(Number(meta.start))?nxNormalizeAngle(Number(meta.start)):fallbackStart;
-  var me=meta&&Number.isFinite(Number(meta.end))?nxNormalizeAngle(Number(meta.end)):fallbackEnd;
-  var center=Number.isFinite(Number(meta&&meta.center))?nxNormalizeAngle(Number(meta.center)):180;
-  nxUpgradeWinBounds={center:center,start:ms,end:me,spanDeg:span,version:Number(meta&&meta.version||0)};
   var chance=document.getElementById('up12Chance');
   var label=document.getElementById('up12ChanceLabel');
   var bar=document.getElementById('up12ChanceBar');
-  if(chance)chance.textContent=nxFormatChance(pct);
+  if(chance)chance.textContent=pct.toFixed(2).replace('.',',')+'%';
   if(label)label.textContent=nxChanceLabel(pct);
   if(bar)bar.style.width=pct+'%';
   nxSetUpgradeChanceArc(pct);
-}
-function nxSetUpgradeChanceArcFromServer(chancePct,start,end,version){
-  nxSyncUpgradeServerChance(chancePct,{start:start,end:end,version:version});
 }
 function nxUpgradePointerIsInWinZone(angle,chancePct){
   var deg=nxNormalizeAngle(angle),pct=Math.max(0,Math.min(100,Number(chancePct)||0));
@@ -1772,39 +1695,7 @@ function nxUpgradePointerIsInWinZone(angle,chancePct){
   var diff=Math.abs(((deg-180+540)%360)-180);
   return diff < (half-0.000001);
 }
-function nxCanonicalUpgradeVisualAngle(chancePct,rollPercent,success){
-  var pct=Math.max(0,Math.min(100,Number(chancePct)||0));
-  var roll=Math.max(0,Math.min(99.999999,Number(rollPercent)||0));
-  var b=nxUpgradeWinBounds;
-  if(!b||!Number.isFinite(b.spanDeg)){
-    var span=pct*3.6,start=nxNormalizeAngle(180-span/2),end=nxNormalizeAngle(180+span/2);
-    b={center:180,start:start,end:end,spanDeg:span};
-  }
-  if(success&&pct>=100)return b.center;
-  if(!success&&pct<=0)return 0;
-  var otherDeg=Math.max(0,360-b.spanDeg);
-  // Keep the same authoritative probability distribution, but never render a
-  // successful result directly on the painted sector boundary. This is a
-  // presentation inset only; the server success calculation remains roll<pct.
-  var padDeg=Math.min(6,b.spanDeg*0.12,otherDeg*0.12);
-  if(success){
-    var usable=Math.max(0,b.spanDeg-2*padDeg);
-    var ratio=pct>0?Math.max(0,Math.min(0.999999,roll/pct)):0.5;
-    return nxNormalizeAngle(b.start+padDeg+ratio*usable);
-  }
-  if(pct>=99.999999)return 0;
-  var ratio2=Math.max(0,Math.min(0.999999,(roll-pct)/Math.max(0.000001,100-pct)));
-  var usable2=Math.max(0,otherDeg-2*padDeg);
-  return nxNormalizeAngle(b.end+padDeg+ratio2*usable2);
-}
-
-function nxForcedUpgradeVisualAngle(chancePct,success){
-  var pct=Math.max(0,Math.min(100,Number(chancePct)||0));
-  if(pct>=100)return 180;if(pct<=0)return 0;
-  return success?180:0;
-}
 function updateUpgradePreview(){
-  if(nxUpgradeResultVisible && !_activeUpgrade)return;
   var srcs=getUpgradeSources(),total=getUpgradeTotalPrice();
   var target=upgradeTargetName?(skinsList||[]).find(function(x){return x[0]===upgradeTargetName;}):null;
   if(target&&!up9TargetEligible(target)){target=null;upgradeTargetName='';upgradeTargetPrice=0;selectedUpgrade=null;}
@@ -1813,21 +1704,21 @@ function updateUpgradePreview(){
     if(srcs.length){var first=srcs[0].item;srcBox.innerHTML='<div class="up12-preview-art">'+artImg(first[0])+'</div><div class="up12-preview-name">'+safeSkinLabel(first[0])+'</div>'+(srcs.length>1?'<div class="up12-preview-more">+'+(srcs.length-1)+' предмет(а)</div>':'');}
     else srcBox.innerHTML='<div class="up12-placeholder-icon up12-source-glyph"></div><div class="up12-preview-name">Выберите предмет для ставки</div>';
   }
-  if(srcMeta)srcMeta.innerHTML=srcs.length?'<b>'+srcs.length+'</b> предмет(а) · <b>'+money(total)+'</b>':'Из инвентаря';
+  if(srcMeta)srcMeta.innerHTML=srcs.length?'<b>'+srcs.length+'</b> предмет(а) · <b>'+money(total)+' ₽</b>':'Из инвентаря';
   if(tBox){
     if(target)tBox.innerHTML='<div class="up12-preview-art">'+artImg(target[0])+'</div><div class="up12-preview-name">'+safeSkinLabel(target[0])+'</div>';
     else tBox.innerHTML='<div class="up12-placeholder-icon up12-target-glyph"></div><div class="up12-preview-name">Выберите цель для апгрейда</div>';
   }
-  if(tMeta)tMeta.innerHTML=target?'<b>'+money(getCatalogPrice(target[0],target[1]))+'</b>'+marketSourceBadge(target[0]):'Из каталога';
-  var mult=0,baseChance=0;if(total&&target){var targetCatalogPrice=getCatalogPrice(target[0],target[1]);mult=targetCatalogPrice/total;baseChance=Math.min(NX_UPGRADE_MAX_CHANCE,(100/mult)*NX_UPGRADE_RETURN_RATE);}
+  if(tMeta)tMeta.innerHTML=target?'<b>'+money(getCatalogPrice(target[0],target[1]))+' ₽</b>'+marketSourceBadge(target[0]):'Из каталога';
+  var mult=0,baseChance=0;if(total&&target){var targetCatalogPrice=getCatalogPrice(target[0],target[1]);mult=targetCatalogPrice/total;baseChance=Math.min(100,100/mult);}
   var bonus=1;
-  var effective=Math.min(NX_UPGRADE_MAX_CHANCE,baseChance*bonus);
+  var effective=Math.min(100,baseChance*bonus);
   // In the separate recording page the wheel always shows the ordinary
   // displayed chance. The demo server result may still be a guaranteed
   // outcome, but that does not alter the on-screen percentage.
-  if(currentPage !== 'recording' && currentUser&&currentUser.upgradeBoost)effective=Math.min(NX_UPGRADE_MAX_CHANCE,effective+15);
+  if(currentPage !== 'recording' && currentUser&&currentUser.upgradeBoost)effective=Math.min(100,effective+15);
   var pct=document.getElementById('up12Chance'),bar=document.getElementById('up12ChanceBar'),btn=document.getElementById('up12Run');
-  if(pct)pct.textContent=nxFormatChance(effective);
+  if(pct)pct.textContent=effective?(effective.toFixed(2).replace('.',',')+'%'):'0,00%';
   var chanceLabel=document.getElementById('up12ChanceLabel');if(chanceLabel)chanceLabel.textContent=nxChanceLabel(effective);
   if(bar)bar.style.width=Math.max(0,Math.min(100,effective))+'%';
   var wheel=document.getElementById('up12Wheel');
@@ -1840,7 +1731,7 @@ function updateUpgradePreview(){
   var mr=document.getElementById('up12MultRow');if(mr){mr.querySelectorAll('.up12-mult').forEach(function(b,i){b.classList.toggle('active',!!_upgradeQuickSelection&&_upgradeQuickSelection.type==='mult'&&_upgradeQuickSelection.index===i);});mr.querySelectorAll('.up12-chance-btn').forEach(function(b,i){b.classList.toggle('active',!!_upgradeQuickSelection&&_upgradeQuickSelection.type==='pct'&&_upgradeQuickSelection.index===i);});}
   var count=document.getElementById('up12BasketCount');if(count)count.textContent=srcs.length+'/6';
   var sourcePane=document.getElementById('up12SourceCount');if(sourcePane)sourcePane.textContent=srcs.length+'/6';
-  var bottom=document.getElementById('up12SourceMetaBottom');if(bottom)bottom.textContent=money(total);
+  var bottom=document.getElementById('up12SourceMetaBottom');if(bottom)bottom.textContent=money(total)+' ₽';
 }
 function setUpgradeSourceTab(tab){
   _up12SourceTab=tab==='shop'?'shop':'inventory';
@@ -1853,7 +1744,7 @@ function setUpgradeSourceTab(tab){
   var arr=(skinsList||[]).filter(function(x){var p=getCatalogPrice(x[0],x[1]),n=String(x[0]||'').toLowerCase();return(!q||n.indexOf(q)!==-1)&&p>=min&&p<=max;}).slice();
   arr.sort(function(a,c){var d=Number(a[1])-Number(c[1]);return d?(sort==='desc'?-d:d):String(a[0]).localeCompare(String(c[0]));});
   if(!arr.length){list.innerHTML='<div class="up12-empty" style="grid-column:1/-1">В магазине ничего не найдено.</div>';return false;}
-  list.innerHTML=arr.slice(0,80).map(function(x){var idx=skinsList.indexOf(x);return '<div class="up12-card shop-card"><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+catalogMoney(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+'</div><button type="button" class="up12-buy" onclick="return buySkin('+idx+')">КУПИТЬ</button></div>';}).join('');
+  list.innerHTML=arr.slice(0,80).map(function(x){var idx=skinsList.indexOf(x);return '<div class="up12-card shop-card"><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+' ₽</div><button type="button" class="up12-buy" onclick="return buySkin('+idx+')">КУПИТЬ</button></div>';}).join('');
   return false;
 }
 function focusUpgradePane(which){
@@ -1920,12 +1811,12 @@ function renderRecordingShop(){
   if(!visible.length){
     html+='<div class="panel" style="margin-top:10px;text-align:center;"><div class="muted">Каталог демо-магазина пока не загрузился.</div><button type="button" class="login-pill" style="margin-top:10px" onclick="window._recordingCatalogSyncPromise=null;ensureRecordingCatalog();return renderRecordingShop()">↻ Повторить загрузку</button></div>';
   }else{
-    html+='<div class="nx-rec-grid">'+visible.map(function(x,i){return '<article class="nx-rec-card"><div class="nx-rec-art">'+artImg(x[0])+'</div><b>'+safeSkinLabel(x[0])+'</b><span>'+money(x[1])+'</span><button type="button" onclick="return addRecordingSkin('+i+')">ДОБАВИТЬ</button></article>';}).join('')+'</div>'+(list.length>recordingCatalogLimit?'<button type="button" class="login-pill" style="width:100%;margin-top:10px" onclick="recordingCatalogLimit=Math.min(recordingCatalogLimit+80,recordingCatalogFiltered.length);return renderRecordingShop()">Показать ещё · '+(list.length-recordingCatalogLimit)+'</button>':'');
+    html+='<div class="nx-rec-grid">'+visible.map(function(x,i){return '<article class="nx-rec-card"><div class="nx-rec-art">'+artImg(x[0])+'</div><b>'+safeSkinLabel(x[0])+'</b><span>'+money(x[1])+' ₽</span><button type="button" onclick="return addRecordingSkin('+i+')">ДОБАВИТЬ</button></article>';}).join('')+'</div>'+(list.length>recordingCatalogLimit?'<button type="button" class="login-pill" style="width:100%;margin-top:10px" onclick="recordingCatalogLimit=Math.min(recordingCatalogLimit+80,recordingCatalogFiltered.length);return renderRecordingShop()">Показать ещё · '+(list.length-recordingCatalogLimit)+'</button>':'');
   }
   return html+'</div>';
 }
 async function addRecordingSkin(i){var x=recordingCatalogFiltered[Number(i)];if(!x)return false;try{var r=await fetch(apiUrl('/api/recording/add'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken||'',adminToken:adminToken||'',item:{name:x[0]}}),cache:'no-store'});var d=await r.json().catch(function(){return{}});if(!r.ok||!d.ok)return showInfo('Демо-инвентарь',d.error||'Не удалось добавить предмет.');applyRecordingState(d.recording);recordingTab='inventory';renderRecordingMode(document.getElementById('appMain'));}catch(e){showInfo('Демо-инвентарь','Сервер недоступен.');}return false;}
-function renderRecordingInventory(){var inv=Array.isArray(recordingState.inventory)?recordingState.inventory:[];var html='<div class="nx-rec-panel"><div class="nx-rec-inv-head"><b>ДЕМО-ИНВЕНТАРЬ</b><span>'+inv.length+' предмет'+(inv.length===1?'':'ов')+'</span></div><div class="nx-rec-grid">';html+=inv.map(function(x){return '<article class="nx-rec-card"><div class="nx-rec-art">'+artImg(x.name)+'</div><b>'+safeSkinLabel(x.name)+'</b><span>'+money(x.price)+'</span></article>';}).join('');html+='</div><button type="button" class="login-pill" style="width:100%;margin-top:10px" onclick="return resetRecordingInventory()">ОЧИСТИТЬ ДЕМО-ИНВЕНТАРЬ</button></div>';return html;}
+function renderRecordingInventory(){var inv=Array.isArray(recordingState.inventory)?recordingState.inventory:[];var html='<div class="nx-rec-panel"><div class="nx-rec-inv-head"><b>ДЕМО-ИНВЕНТАРЬ</b><span>'+inv.length+' предмет'+(inv.length===1?'':'ов')+'</span></div><div class="nx-rec-grid">';html+=inv.map(function(x){return '<article class="nx-rec-card"><div class="nx-rec-art">'+artImg(x.name)+'</div><b>'+safeSkinLabel(x.name)+'</b><span>'+money(x.price)+' ₽</span></article>';}).join('');html+='</div><button type="button" class="login-pill" style="width:100%;margin-top:10px" onclick="return resetRecordingInventory()">ОЧИСТИТЬ ДЕМО-ИНВЕНТАРЬ</button></div>';return html;}
 async function resetRecordingInventory(){try{var r=await fetch(apiUrl('/api/recording/reset'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken||'',adminToken:adminToken||''}),cache:'no-store'});var d=await r.json().catch(function(){return{}});if(!r.ok||!d.ok)return showInfo('Демо-инвентарь',d.error||'Не удалось очистить.');applyRecordingState(d.recording);renderRecordingMode(document.getElementById('appMain'));}catch(e){showInfo('Демо-инвентарь','Сервер недоступен.');}return false;}
 function renderRecordingMode(m){
   if(!(currentUser&&(currentUser.recordingAccess||isAdminUI))){m.innerHTML='<div class="section-title">Режим съёмки</div><div class="panel"><div class="muted">Доступ к режиму съёмки ещё не выдан.</div></div>';return;}
@@ -1946,18 +1837,11 @@ function renderRecordingMode(m){
 }
 
 function renderUpgrade(m){
-  // Hard-lock the upgrade machine while the result is on screen. Any late
-  // catalog/player/network callback must never rebuild this DOM and reset the
-  // wheel back to 0.00% or clear the result cards.
-  if(nxUpgradeResultVisible===true && document.getElementById('up12Wheel')){
-    try{nxRestoreUpgradeResultVisual();}catch(e){}
-    return;
-  }
   if(!currentUser){m.innerHTML='<div class="section-title">Апгрейд</div><div class="panel"><div class="muted">Сначала войдите.</div></div>';return;}
   m.innerHTML='<div class="up12-shell">'+
     '<div class="up12-titlebar"><div><h2>NEXUSDROP · АПГРЕЙД</h2><p>Предметы для ставки слева · цель справа</p></div></div>'+renderUpgradeToolbar()+
     '<div class="up12-machine-top">'+
-      '<div class="up12-wheel-wrap" aria-label="Индикатор шанса апгрейда"><div id="up12Wheel" class="up12-wheel"><svg class="up12-wheel-svg" viewBox="0 0 420 420" role="img" aria-hidden="true"><defs><radialGradient id="up12CoreGradient" cx="36%" cy="24%"><stop offset="0" stop-color="#34373c"/><stop offset="0.54" stop-color="#1a1c21"/><stop offset="1" stop-color="#0b0d11"/></radialGradient><radialGradient id="up12CenterGradient" cx="30%" cy="24%"><stop offset="0" stop-color="#fff8c6"/><stop offset="0.32" stop-color="#ffd74c"/><stop offset="0.72" stop-color="#f49316"/><stop offset="1" stop-color="#1a1d22"/></radialGradient><linearGradient id="up12ChanceGradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b7f32d"/><stop offset="0.36" stop-color="#ffd711"/><stop offset="0.7" stop-color="#ff9b0f"/><stop offset="1" stop-color="#ef3d24"/></linearGradient><filter id="up12ArcGlow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="up12ArcGlowWin" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#61e58a" flood-opacity=".55"/></filter><filter id="up12ArcGlowLose" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#ff4934" flood-opacity=".5"/></filter><filter id="up12CoreGlow" x="-100%" y="-100%" width="300%" height="300%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#ffc43a" flood-opacity=".35"/></filter><linearGradient id="up12PointerGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffbe2"/><stop offset="0.28" stop-color="#ffe55b"/><stop offset="0.72" stop-color="#ffbc20"/><stop offset="1" stop-color="#f06518"/></linearGradient><filter id="up12PointerGlow" x="-120%" y="-120%" width="340%" height="340%"><feDropShadow dx="0" dy="0" stdDeviation="2.7" flood-color="#ffd83a" flood-opacity=".88"/></filter><filter id="up12PointerGlowWin" x="-120%" y="-120%" width="340%" height="340%"><feDropShadow dx="0" dy="0" stdDeviation="3.2" flood-color="#63e98f" flood-opacity=".95"/></filter><filter id="up12PointerGlowLose" x="-120%" y="-120%" width="340%" height="340%"><feDropShadow dx="0" dy="0" stdDeviation="3.1" flood-color="#ff6258" flood-opacity=".95"/></filter><clipPath id="up12PointerClip"><circle cx="210" cy="210" r="190"/></clipPath></defs><circle class="up12-dial-shell" cx="210" cy="210" r="195"/><circle class="up12-dial-outer" cx="210" cy="210" r="181"/><circle class="up12-dial-inner" cx="210" cy="210" r="171"/><line class="up12-dial-tick major" x1="210.00" y1="24.00" x2="210.00" y2="36.00"/><line class="up12-dial-tick" x1="229.44" y1="25.02" x2="228.71" y2="31.98"/><line class="up12-dial-tick" x1="248.67" y1="28.06" x2="247.22" y2="34.91"/><line class="up12-dial-tick" x1="267.48" y1="33.10" x2="265.31" y2="39.76"/><line class="up12-dial-tick" x1="285.65" y1="40.08" x2="282.81" y2="46.48"/><line class="up12-dial-tick major" x1="303.00" y1="48.92" x2="297.00" y2="59.31"/><line class="up12-dial-tick" x1="319.33" y1="59.52" x2="315.21" y2="65.19"/><line class="up12-dial-tick" x1="334.46" y1="71.78" x2="329.77" y2="76.98"/><line class="up12-dial-tick" x1="348.22" y1="85.54" x2="343.02" y2="90.23"/><line class="up12-dial-tick" x1="360.48" y1="100.67" x2="354.81" y2="104.79"/><line class="up12-dial-tick major" x1="371.08" y1="117.00" x2="360.69" y2="123.00"/><line class="up12-dial-tick" x1="379.92" y1="134.35" x2="373.52" y2="137.19"/><line class="up12-dial-tick" x1="386.90" y1="152.52" x2="380.24" y2="154.69"/><line class="up12-dial-tick" x1="391.94" y1="171.33" x2="385.09" y2="172.78"/><line class="up12-dial-tick" x1="394.98" y1="190.56" x2="388.02" y2="191.29"/><line class="up12-dial-tick major" x1="396.00" y1="210.00" x2="384.00" y2="210.00"/><line class="up12-dial-tick" x1="394.98" y1="229.44" x2="388.02" y2="228.71"/><line class="up12-dial-tick" x1="391.94" y1="248.67" x2="385.09" y2="247.22"/><line class="up12-dial-tick" x1="386.90" y1="267.48" x2="380.24" y2="265.31"/><line class="up12-dial-tick" x1="379.92" y1="285.65" x2="373.52" y2="282.81"/><line class="up12-dial-tick major" x1="371.08" y1="303.00" x2="360.69" y2="297.00"/><line class="up12-dial-tick" x1="360.48" y1="319.33" x2="354.81" y2="315.21"/><line class="up12-dial-tick" x1="348.22" y1="334.46" x2="343.02" y2="329.77"/><line class="up12-dial-tick" x1="334.46" y1="348.22" x2="329.77" y2="343.02"/><line class="up12-dial-tick" x1="319.33" y1="360.48" x2="315.21" y2="354.81"/><line class="up12-dial-tick major" x1="303.00" y1="371.08" x2="297.00" y2="360.69"/><line class="up12-dial-tick" x1="285.65" y1="379.92" x2="282.81" y2="373.52"/><line class="up12-dial-tick" x1="267.48" y1="386.90" x2="265.31" y2="380.24"/><line class="up12-dial-tick" x1="248.67" y1="391.94" x2="247.22" y2="385.09"/><line class="up12-dial-tick" x1="229.44" y1="394.98" x2="228.71" y2="388.02"/><line class="up12-dial-tick major" x1="210.00" y1="396.00" x2="210.00" y2="384.00"/><line class="up12-dial-tick" x1="190.56" y1="394.98" x2="191.29" y2="388.02"/><line class="up12-dial-tick" x1="171.33" y1="391.94" x2="172.78" y2="385.09"/><line class="up12-dial-tick" x1="152.52" y1="386.90" x2="154.69" y2="380.24"/><line class="up12-dial-tick" x1="134.35" y1="379.92" x2="137.19" y2="373.52"/><line class="up12-dial-tick major" x1="117.00" y1="371.08" x2="123.00" y2="360.69"/><line class="up12-dial-tick" x1="100.67" y1="360.48" x2="104.79" y2="354.81"/><line class="up12-dial-tick" x1="85.54" y1="348.22" x2="90.23" y2="343.02"/><line class="up12-dial-tick" x1="71.78" y1="334.46" x2="76.98" y2="329.77"/><line class="up12-dial-tick" x1="59.52" y1="319.33" x2="65.19" y2="315.21"/><line class="up12-dial-tick major" x1="48.92" y1="303.00" x2="59.31" y2="297.00"/><line class="up12-dial-tick" x1="40.08" y1="285.65" x2="46.48" y2="282.81"/><line class="up12-dial-tick" x1="33.10" y1="267.48" x2="39.76" y2="265.31"/><line class="up12-dial-tick" x1="28.06" y1="248.67" x2="34.91" y2="247.22"/><line class="up12-dial-tick" x1="25.02" y1="229.44" x2="31.98" y2="228.71"/><line class="up12-dial-tick major" x1="24.00" y1="210.00" x2="36.00" y2="210.00"/><line class="up12-dial-tick" x1="25.02" y1="190.56" x2="31.98" y2="191.29"/><line class="up12-dial-tick" x1="28.06" y1="171.33" x2="34.91" y2="172.78"/><line class="up12-dial-tick" x1="33.10" y1="152.52" x2="39.76" y2="154.69"/><line class="up12-dial-tick" x1="40.08" y1="134.35" x2="46.48" y2="137.19"/><line class="up12-dial-tick major" x1="48.92" y1="117.00" x2="59.31" y2="123.00"/><line class="up12-dial-tick" x1="59.52" y1="100.67" x2="65.19" y2="104.79"/><line class="up12-dial-tick" x1="71.78" y1="85.54" x2="76.98" y2="90.23"/><line class="up12-dial-tick" x1="85.54" y1="71.78" x2="90.23" y2="76.98"/><line class="up12-dial-tick" x1="100.67" y1="59.52" x2="104.79" y2="65.19"/><line class="up12-dial-tick major" x1="117.00" y1="48.92" x2="123.00" y2="59.31"/><line class="up12-dial-tick" x1="134.35" y1="40.08" x2="137.19" y2="46.48"/><line class="up12-dial-tick" x1="152.52" y1="33.10" x2="154.69" y2="39.76"/><line class="up12-dial-tick" x1="171.33" y1="28.06" x2="172.78" y2="34.91"/><line class="up12-dial-tick" x1="190.56" y1="25.02" x2="191.29" y2="31.98"/><text class="up12-dial-label" x="210" y="43" text-anchor="middle">100%</text><circle class="up12-dial-arc-base" cx="210" cy="210" r="158" transform="rotate(180 210 210)"/><circle id="up12ChanceArc" class="up12-dial-arc" cx="210" cy="210" r="158" pathLength="100" stroke-dasharray="0 100" transform="rotate(270 210 210)"/><circle class="up12-dial-arc-highlight" cx="210" cy="210" r="147"/><circle class="up12-dial-core" cx="210" cy="210" r="110"/><circle class="up12-dial-core-inner" cx="210" cy="210" r="88"/><path class="up12-dial-ghost" d="M210 135 L276 184 L276 245 L210 200 L144 245 L144 184 Z"/><g id="up12Pointer" class="nx-center-pointer" aria-hidden="true" pointer-events="none"><g id="up12PointerRotator"><path id="up12PointerShape" class="nx-pointer-tip" d="M210 377 L202 394 L218 394 Z"></path><circle id="up12PointerDot" class="nx-pointer-dot-v57" cx="210" cy="400" r="3.8"></circle></g></g></svg><div class="up12-wheel-core"><b id="up12Chance">0.00%</b><span id="up12ChanceLabel">выберите цель</span></div></div></div>'+
+      '<div class="up12-wheel-wrap" aria-label="Индикатор шанса апгрейда"><div id="up12Wheel" class="up12-wheel"><svg class="up12-wheel-svg" viewBox="0 0 420 420" role="img" aria-hidden="true"><defs><radialGradient id="up12CoreGradient" cx="36%" cy="24%"><stop offset="0" stop-color="#34373c"/><stop offset="0.54" stop-color="#1a1c21"/><stop offset="1" stop-color="#0b0d11"/></radialGradient><radialGradient id="up12CenterGradient" cx="30%" cy="24%"><stop offset="0" stop-color="#fff8c6"/><stop offset="0.32" stop-color="#ffd74c"/><stop offset="0.72" stop-color="#f49316"/><stop offset="1" stop-color="#1a1d22"/></radialGradient><linearGradient id="up12ChanceGradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b7f32d"/><stop offset="0.36" stop-color="#ffd711"/><stop offset="0.7" stop-color="#ff9b0f"/><stop offset="1" stop-color="#ef3d24"/></linearGradient><filter id="up12ArcGlow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="up12ArcGlowWin" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#61e58a" flood-opacity=".55"/></filter><filter id="up12ArcGlowLose" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#ff4934" flood-opacity=".5"/></filter><filter id="up12CoreGlow" x="-100%" y="-100%" width="300%" height="300%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#ffc43a" flood-opacity=".35"/></filter><linearGradient id="up12PointerGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffbe2"/><stop offset="0.28" stop-color="#ffe55b"/><stop offset="0.72" stop-color="#ffbc20"/><stop offset="1" stop-color="#f06518"/></linearGradient><filter id="up12PointerGlow" x="-120%" y="-120%" width="340%" height="340%"><feDropShadow dx="0" dy="0" stdDeviation="2.7" flood-color="#ffd83a" flood-opacity=".88"/></filter><filter id="up12PointerGlowWin" x="-120%" y="-120%" width="340%" height="340%"><feDropShadow dx="0" dy="0" stdDeviation="3.2" flood-color="#63e98f" flood-opacity=".95"/></filter><filter id="up12PointerGlowLose" x="-120%" y="-120%" width="340%" height="340%"><feDropShadow dx="0" dy="0" stdDeviation="3.1" flood-color="#ff6258" flood-opacity=".95"/></filter><clipPath id="up12PointerClip"><circle cx="210" cy="210" r="190"/></clipPath></defs><circle class="up12-dial-shell" cx="210" cy="210" r="195"/><circle class="up12-dial-outer" cx="210" cy="210" r="181"/><circle class="up12-dial-inner" cx="210" cy="210" r="171"/><line class="up12-dial-tick major" x1="210.00" y1="24.00" x2="210.00" y2="36.00"/><line class="up12-dial-tick" x1="229.44" y1="25.02" x2="228.71" y2="31.98"/><line class="up12-dial-tick" x1="248.67" y1="28.06" x2="247.22" y2="34.91"/><line class="up12-dial-tick" x1="267.48" y1="33.10" x2="265.31" y2="39.76"/><line class="up12-dial-tick" x1="285.65" y1="40.08" x2="282.81" y2="46.48"/><line class="up12-dial-tick major" x1="303.00" y1="48.92" x2="297.00" y2="59.31"/><line class="up12-dial-tick" x1="319.33" y1="59.52" x2="315.21" y2="65.19"/><line class="up12-dial-tick" x1="334.46" y1="71.78" x2="329.77" y2="76.98"/><line class="up12-dial-tick" x1="348.22" y1="85.54" x2="343.02" y2="90.23"/><line class="up12-dial-tick" x1="360.48" y1="100.67" x2="354.81" y2="104.79"/><line class="up12-dial-tick major" x1="371.08" y1="117.00" x2="360.69" y2="123.00"/><line class="up12-dial-tick" x1="379.92" y1="134.35" x2="373.52" y2="137.19"/><line class="up12-dial-tick" x1="386.90" y1="152.52" x2="380.24" y2="154.69"/><line class="up12-dial-tick" x1="391.94" y1="171.33" x2="385.09" y2="172.78"/><line class="up12-dial-tick" x1="394.98" y1="190.56" x2="388.02" y2="191.29"/><line class="up12-dial-tick major" x1="396.00" y1="210.00" x2="384.00" y2="210.00"/><line class="up12-dial-tick" x1="394.98" y1="229.44" x2="388.02" y2="228.71"/><line class="up12-dial-tick" x1="391.94" y1="248.67" x2="385.09" y2="247.22"/><line class="up12-dial-tick" x1="386.90" y1="267.48" x2="380.24" y2="265.31"/><line class="up12-dial-tick" x1="379.92" y1="285.65" x2="373.52" y2="282.81"/><line class="up12-dial-tick major" x1="371.08" y1="303.00" x2="360.69" y2="297.00"/><line class="up12-dial-tick" x1="360.48" y1="319.33" x2="354.81" y2="315.21"/><line class="up12-dial-tick" x1="348.22" y1="334.46" x2="343.02" y2="329.77"/><line class="up12-dial-tick" x1="334.46" y1="348.22" x2="329.77" y2="343.02"/><line class="up12-dial-tick" x1="319.33" y1="360.48" x2="315.21" y2="354.81"/><line class="up12-dial-tick major" x1="303.00" y1="371.08" x2="297.00" y2="360.69"/><line class="up12-dial-tick" x1="285.65" y1="379.92" x2="282.81" y2="373.52"/><line class="up12-dial-tick" x1="267.48" y1="386.90" x2="265.31" y2="380.24"/><line class="up12-dial-tick" x1="248.67" y1="391.94" x2="247.22" y2="385.09"/><line class="up12-dial-tick" x1="229.44" y1="394.98" x2="228.71" y2="388.02"/><line class="up12-dial-tick major" x1="210.00" y1="396.00" x2="210.00" y2="384.00"/><line class="up12-dial-tick" x1="190.56" y1="394.98" x2="191.29" y2="388.02"/><line class="up12-dial-tick" x1="171.33" y1="391.94" x2="172.78" y2="385.09"/><line class="up12-dial-tick" x1="152.52" y1="386.90" x2="154.69" y2="380.24"/><line class="up12-dial-tick" x1="134.35" y1="379.92" x2="137.19" y2="373.52"/><line class="up12-dial-tick major" x1="117.00" y1="371.08" x2="123.00" y2="360.69"/><line class="up12-dial-tick" x1="100.67" y1="360.48" x2="104.79" y2="354.81"/><line class="up12-dial-tick" x1="85.54" y1="348.22" x2="90.23" y2="343.02"/><line class="up12-dial-tick" x1="71.78" y1="334.46" x2="76.98" y2="329.77"/><line class="up12-dial-tick" x1="59.52" y1="319.33" x2="65.19" y2="315.21"/><line class="up12-dial-tick major" x1="48.92" y1="303.00" x2="59.31" y2="297.00"/><line class="up12-dial-tick" x1="40.08" y1="285.65" x2="46.48" y2="282.81"/><line class="up12-dial-tick" x1="33.10" y1="267.48" x2="39.76" y2="265.31"/><line class="up12-dial-tick" x1="28.06" y1="248.67" x2="34.91" y2="247.22"/><line class="up12-dial-tick" x1="25.02" y1="229.44" x2="31.98" y2="228.71"/><line class="up12-dial-tick major" x1="24.00" y1="210.00" x2="36.00" y2="210.00"/><line class="up12-dial-tick" x1="25.02" y1="190.56" x2="31.98" y2="191.29"/><line class="up12-dial-tick" x1="28.06" y1="171.33" x2="34.91" y2="172.78"/><line class="up12-dial-tick" x1="33.10" y1="152.52" x2="39.76" y2="154.69"/><line class="up12-dial-tick" x1="40.08" y1="134.35" x2="46.48" y2="137.19"/><line class="up12-dial-tick major" x1="48.92" y1="117.00" x2="59.31" y2="123.00"/><line class="up12-dial-tick" x1="59.52" y1="100.67" x2="65.19" y2="104.79"/><line class="up12-dial-tick" x1="71.78" y1="85.54" x2="76.98" y2="90.23"/><line class="up12-dial-tick" x1="85.54" y1="71.78" x2="90.23" y2="76.98"/><line class="up12-dial-tick" x1="100.67" y1="59.52" x2="104.79" y2="65.19"/><line class="up12-dial-tick major" x1="117.00" y1="48.92" x2="123.00" y2="59.31"/><line class="up12-dial-tick" x1="134.35" y1="40.08" x2="137.19" y2="46.48"/><line class="up12-dial-tick" x1="152.52" y1="33.10" x2="154.69" y2="39.76"/><line class="up12-dial-tick" x1="171.33" y1="28.06" x2="172.78" y2="34.91"/><line class="up12-dial-tick" x1="190.56" y1="25.02" x2="191.29" y2="31.98"/><text class="up12-dial-label" x="210" y="43" text-anchor="middle">100%</text><circle class="up12-dial-arc-base" cx="210" cy="210" r="158" transform="rotate(180 210 210)"/><circle id="up12ChanceArc" class="up12-dial-arc" cx="210" cy="210" r="158" pathLength="100" stroke-dasharray="0 100" transform="rotate(270 210 210)"/><circle class="up12-dial-arc-highlight" cx="210" cy="210" r="147"/><circle class="up12-dial-core" cx="210" cy="210" r="110"/><circle class="up12-dial-core-inner" cx="210" cy="210" r="88"/><path class="up12-dial-ghost" d="M210 135 L276 184 L276 245 L210 200 L144 245 L144 184 Z"/><g id="up12Pointer" class="nx-center-pointer" aria-hidden="true" pointer-events="none"><path id="up12PointerShape" class="nx-pointer-tip" d="M210 377 L202 394 L218 394 Z"></path><circle id="up12PointerDot" class="nx-pointer-dot-v57" cx="210" cy="400" r="3.8"></circle></g></svg><div class="up12-wheel-core"><b id="up12Chance">0.00%</b><span id="up12ChanceLabel">выберите цель</span></div></div></div>'+
       '<div class="up12-preview-row">'+
         '<div class="up12-preview-card"><div class="up12-preview-label">ВАШИ ПРЕДМЕТЫ</div><div id="up12SourcePreview" class="up12-preview-content"><div class="up12-placeholder-icon up12-source-glyph"></div><div class="up12-preview-name">Выберите предмет для ставки</div></div><div id="up12SourceMeta" class="up12-preview-meta">Из инвентаря</div></div>'+
         '<div class="up12-preview-arrow">➜</div>'+
@@ -1981,249 +1865,109 @@ function renderUpgrade(m){
   _upgradeTargetLimit=80;
   renderUpgradeSourceList();renderUpgradeTargetCatalog();updateUpgradePreview();
   startMarketPriceSync();
-  nxRestoreUpgradeResultVisual();
 }
-var nxPointerAngle=0,nxPointerFrame=0,nxPointerLoopFrame=0,nxPointerLoopLast=0,nxPointerSpeed=0,nxPointerAnimationToken=0,nxPointerFinishWatchdog=0; var nxPointerLoopStartedAt=0,nxPointerFinishPlan=null;
-var nxUpgradeResultVisible=false;
-var nxUpgradeLastResult=null;
-var nxUpgradeLastReceivedId='';
-function nxStartNextUpgrade(){
-  if(!nxUpgradeResultVisible)return false;
-  var result=nxUpgradeLastResult,receivedId=String(nxUpgradeLastReceivedId||'');
-  var receivedExists=!!(receivedId&&(state.inventory||[]).some(function(x){return String(x&&x.id||'')===receivedId;}));
-  nxDismissUpgradeResult();
-  _upgradeSelectedIds=receivedExists?[receivedId]:[];
-  selectedUpgrade=null;
-  upgradeTargetName='';upgradeTargetPrice=0;_upgradeQuickSelection=null;
-  try{renderUpgradeSourceList();renderUpgradeTargetCatalog();updateUpgradePreview();}catch(e){}
-  return false;
-}
-var nxUpgradeSpinHold=false;
-var nxUpgradeAudioCtx=null,nxUpgradeSoundTimer=null,nxUpgradeSoundTick=0,nxUpgradeSoundDistance=0,nxUpgradeNoiseBuffer=null;
-var nxUpgradeTickBuffer=null,nxUpgradeTickBufferPromise=null;
+var nxPointerAngle=0,nxPointerFrame=0,nxPointerLoopFrame=0,nxPointerLoopLast=0,nxPointerSpeed=0;
+var nxUpgradeAudioCtx=null,nxUpgradeSoundTimer=null,nxUpgradeSoundTick=0,nxUpgradeNoiseBuffer=null;
 function nxPointerOrbit(){return document.getElementById('up12Pointer')||document.getElementById('up12PointerShape');}
 function nxApplyPointerAngle(angle){
-  // V76: keep the SVG geometry static; rotate only the inner group.
-  var rot=document.getElementById('up12PointerRotator');
-  if(!rot)return;
+  var group=document.getElementById('up12Pointer');
+  var el=document.getElementById('up12PointerShape');
+  var dot=document.getElementById('up12PointerDot');
+  if(!group||!el)return;
   var n=nxNormalizeAngle(angle);
-  rot.setAttribute('transform','rotate('+n.toFixed(4)+' 210 210)');
+  var rad=n*Math.PI/180;
+  // The pointer is generated from absolute SVG coordinates. No transform-origin,
+  // CSS transform, or nested SVG rotation is involved, so the orbit center is
+  // always exactly (210,210) on every supported browser.
+  var ux=Math.sin(rad), uy=Math.cos(rad);
+  var tx=-uy, ty=ux;
+  var cx=210, cy=210;
+  var tipR=170, baseR=186, dotR=191, halfW=8.4;
+  function pt(r,t){return {x:cx+ux*r+tx*t,y:cy+uy*r+ty*t};}
+  var tip=pt(tipR,0), left=pt(baseR,-halfW), right=pt(baseR,halfW);
+  var d='M '+tip.x.toFixed(3)+' '+tip.y.toFixed(3)+' L '+left.x.toFixed(3)+' '+left.y.toFixed(3)+' L '+right.x.toFixed(3)+' '+right.y.toFixed(3)+' Z';
+  el.setAttribute('d',d);
+  el.removeAttribute('transform');
+  el.style.removeProperty('transform');
+  if(dot){
+    var dp=pt(dotR,0);
+    dot.setAttribute('cx',dp.x.toFixed(3));
+    dot.setAttribute('cy',dp.y.toFixed(3));
+    dot.removeAttribute('transform');
+    dot.style.removeProperty('transform');
+  }
+  group.removeAttribute('transform');
+  group.style.removeProperty('transform');
 }
 function nxSetUpgradePointerAngle(deg,immediate){var n=Number(deg);if(!Number.isFinite(n))n=0;nxPointerAngle=nxNormalizeAngle(n);nxApplyPointerAngle(nxPointerAngle);if(immediate)nxPointerSpeed=0;}
-function nxStopPointerAnimation(){nxPointerAnimationToken=(Number(nxPointerAnimationToken)||0)+1;if(nxPointerFrame){cancelAnimationFrame(nxPointerFrame);nxPointerFrame=0;}if(nxPointerFinishWatchdog){clearTimeout(nxPointerFinishWatchdog);nxPointerFinishWatchdog=0;}nxPointerSpeed=0;}
-function nxDismissUpgradeResult(){
-  if(!nxUpgradeResultVisible)return;
-  nxUpgradeResultVisible=false;nxUpgradeLastResult=null;nxUpgradeLastReceivedId='';
-  var fx=document.querySelector('.nx-upgrade-win-fx');if(fx)fx.remove();
-  document.querySelectorAll('.up12-preview-card.nx-target-win').forEach(function(x){x.classList.remove('nx-target-win');});
-  var pointer=document.getElementById('up12Pointer');if(pointer){pointer.classList.remove('result-win','result-lose');nxSetUpgradePointerAngle(0,true);}
-  var wheel=document.getElementById('up12Wheel');if(wheel)wheel.classList.remove('result-win','result-lose');
-  var stage=document.querySelector('.up12-machine-top');if(stage)stage.classList.remove('nx-upgrade-resetting');
-  _upgradeSelectedIds=[];selectedUpgrade=null;upgradeTargetName='';upgradeTargetPrice=0;_upgradeQuickSelection=null;
-}
-function nxRestoreUpgradeResultVisual(){
-  if(!nxUpgradeResultVisible||!nxUpgradeLastResult)return false;
-  var r=nxUpgradeLastResult;
-  try{nxSetUpgradeChanceArcFromServer(Number(r.chance)||0,Number(r.winStart),Number(r.winEnd),Number(r.geometryVersion||0));}catch(e){try{nxSyncUpgradeServerChance(Number(r.chance)||0);}catch(_){}}
-  if(Number.isFinite(Number(r.angle)))nxSetUpgradePointerAngle(Number(r.angle),true);
-  var pointer=document.getElementById('up12Pointer');if(pointer)pointer.classList.add(r.success?'result-win':'result-lose');
-  var wheel=document.getElementById('up12Wheel');if(wheel)wheel.classList.add(r.success?'result-win':'result-lose');
-  var btn=document.getElementById('up12Run');if(btn){btn.disabled=false;btn.textContent='НОВАЯ СТАВКА';btn.onclick=function(){return nxStartNextUpgrade();};}
-  var status=document.getElementById('up12InlineStatus');if(status){status.className='nx-upgrade-inline-status show '+(r.success?'win':'lose');status.innerHTML='<b>'+(r.success?'УСПЕХ':'НЕУДАЧА')+'</b>'+(r.success?'Выдан <strong>'+safeSkinLabel(r.targetName)+'</strong> · '+money(r.targetPrice):'Исходные предметы списаны. Новый предмет не выдан.');}
-  return true;
-}
+function nxStopPointerAnimation(){if(nxPointerFrame){cancelAnimationFrame(nxPointerFrame);nxPointerFrame=0;}}
 async function nxAbortUpgradeVisual(requestId,stage,btn,status,message){
-  var minDuration=upgradeQuickMode?500:700,now=(window.performance&&performance.now)?performance.now():Date.now(),wait=Math.max(0,minDuration-(now-(window.__nxUpgradeVisualStarted||now)));
+  var minDuration=upgradeQuickMode?500:700;
+  var now=(window.performance&&performance.now)?performance.now():Date.now();
+  var wait=Math.max(0,minDuration-(now-(window.__nxUpgradeVisualStarted||now)));
   if(wait>0)await new Promise(function(resolve){setTimeout(resolve,wait);});
   if(_activeUpgrade!==requestId)return false;
-  nxStopPointerLoop();nxStopPointerAnimation();nxStopUpgradeSpinSound();_activeUpgrade=null;
-  if(stage){stage.classList.remove('nx-upgrade-pointer-spinning');stage.classList.remove('nx-upgrade-resetting');}
-  nxUpgradeResultVisible=false;nxUpgradeLastResult=null;
+  nxStopPointerLoop();
+  nxStopPointerAnimation();
+  nxStopUpgradeSpinSound();
+  _activeUpgrade=null;
+  if(stage)stage.classList.remove('nx-upgrade-pointer-spinning');
   if(btn){btn.disabled=false;btn.textContent='ЗАПУСТИТЬ АПГРЕЙД';}
   if(status){status.className='nx-upgrade-inline-status show lose';status.innerHTML='<b>ОПЕРАЦИЯ НЕ ЗАВЕРШЕНА</b>'+escapeHtml(message||'Сервер не вернул результат.');}
   return false;
 }
-function nxStopPointerLoop(preserveSpeed){
-  if(nxPointerLoopFrame){cancelAnimationFrame(nxPointerLoopFrame);nxPointerLoopFrame=0;}
-  nxPointerLoopLast=0;nxUpgradeSpinHold=false;nxPointerFinishPlan=null;
-  if(!preserveSpeed)nxPointerSpeed=0;
-}
+function nxStopPointerLoop(){if(nxPointerLoopFrame){cancelAnimationFrame(nxPointerLoopFrame);nxPointerLoopFrame=0;}nxPointerLoopLast=0;nxPointerSpeed=0;}
 function nxStartPointerLoop(){
   nxStopPointerAnimation();nxStopPointerLoop();
   var el=nxPointerOrbit();if(!el)return;
   var perf=window.performance&&performance.now?performance.now.bind(performance):function(){return Date.now();};
   var started=perf(),last=started;
-  nxPointerLoopStartedAt=started;
-  nxPointerFinishPlan=null;
-  var cruiseSpeed=upgradeQuickMode?350:190;
-  var accelMs=upgradeQuickMode?420:900;
-  var handoffSpeed=upgradeQuickMode?120:72;
+  var cruiseSpeed=upgradeQuickMode?330:165;
+  var accelMs=upgradeQuickMode?220:560;
   nxPointerLoopLast=started;
-  function smooth(t){t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);}
   function frame(now){
     if(!_activeUpgrade){nxStopPointerLoop();return;}
-    if(nxPointerFinishPlan && now>=Number(nxPointerFinishPlan.readyAt||0)){nxBeginPointerFinish();return;}
     var dt=Math.max(0,Math.min(34,now-last));last=now;nxPointerLoopLast=now;
-    var age=now-started,speed;
-    if(age<accelMs){
-      var a=smooth(age/accelMs);
-      speed=cruiseSpeed*(0.06+0.94*a);
-    }else{
-      speed=cruiseSpeed;
-    }
+    var age=now-started;
+    var ramp=Math.min(1,age/accelMs);
+    var eased=ramp*ramp*(3-2*ramp);
+    var speed=cruiseSpeed*(0.28+0.72*eased);
     nxPointerSpeed=speed;
     var current=Number(nxPointerAngle);if(!Number.isFinite(current))current=0;
-    var move=Math.max(0,speed*dt/1000);
-    nxPointerAngle=nxNormalizeAngle(current+move);nxApplyPointerAngle(nxPointerAngle);
-    if(typeof nxAdvanceUpgradeSpinSound==='function')nxAdvanceUpgradeSpinSound(move,speed);
+    nxPointerAngle=nxNormalizeAngle(current+speed*dt/1000);
+    nxApplyPointerAngle(nxPointerAngle);
     nxPointerLoopFrame=requestAnimationFrame(frame);
   }
   nxPointerLoopFrame=requestAnimationFrame(frame);
 }
-
-/*
- * Reference-style handoff:
- * 1) keep the wheel spinning until a stable minimum time;
- * 2) smoothly reduce the current velocity to a slow crawl;
- * 3) coast without changing direction;
- * 4) brake to the exact server angle with a velocity-continuous curve.
- *
- * There is deliberately no "set angle to target" watchdog. A delayed RAF can
- * only delay the next frame; it can never teleport the pointer.
- */
-function nxPlanPointerFinish(target,onDone){
-  if(!_activeUpgrade)return;
+function nxNormalizeAngle(a){var n=Number(a);if(!Number.isFinite(n))n=0;n=n%360;if(n<0)n+=360;return n;}
+function nxAnimatePointerTo(target,duration,turns,onDone){
+  var el=nxPointerOrbit();if(!el){if(onDone)onDone();return;}
+  nxStopPointerLoop();nxStopPointerAnimation();
+  var from=Number(nxPointerAngle);if(!Number.isFinite(from))from=0;
+  var targetNorm=nxNormalizeAngle(target);
+  var delta=targetNorm-nxNormalizeAngle(from);if(delta<0)delta+=360;
+  var extraTurns=Math.max(1.5,Number(turns)||0);
+  var distance=delta+extraTurns*360;
   var perf=window.performance&&performance.now?performance.now.bind(performance):function(){return Date.now();};
-  var now=perf(),started=Number(nxPointerLoopStartedAt)||now;
-  var minSpin=upgradeQuickMode?1000:1850;
-  nxPointerFinishPlan={target:nxNormalizeAngle(target),onDone:onDone||function(){},readyAt:started+minSpin};
-  if(now>=nxPointerFinishPlan.readyAt){
-    nxBeginPointerFinish();
-  }
-}
-
-function nxBeginPointerFinish(){
-  var plan=nxPointerFinishPlan;if(!plan || (typeof _activeUpgrade!=='undefined' && !_activeUpgrade))return;
-  nxPointerFinishPlan=null;
-  if(nxPointerLoopFrame){cancelAnimationFrame(nxPointerLoopFrame);nxPointerLoopFrame=0;}
-  var perf=window.performance&&performance.now?performance.now.bind(performance):function(){return Date.now();};
-  var now=perf(),last=now;
-  var from=nxNormalizeAngle(nxPointerAngle),target=nxNormalizeAngle(plan.target);
-  var delta=target-from;if(delta<0)delta+=360;
-  var v0=Math.max(0,Number(nxPointerSpeed)||0);
-  var low=upgradeQuickMode?92:58;
-  var handoffMs=upgradeQuickMode?420:700;
-  if(v0<low)handoffMs=0;
-  var handoffDistance=(v0+low)*0.5*(handoffMs/1000);
-  // Never reverse. The final path is the shortest forward path to the
-  // authoritative target; only add a full revolution when it is needed to
-  // absorb the captured velocity smoothly.
-  var needed=delta;
-  var minHandoffDistance=v0*(handoffMs/1000)*0.30;
-  while(needed<minHandoffDistance+6){needed+=360;}
-  var coastDistance=Math.max(0,needed-handoffDistance);
-  var brakeStartDistance=Math.max(16,low*0.95);
-  var brakeDistance=Math.min(brakeStartDistance,Math.max(12,needed*0.45));
-  var coastTarget=Math.max(0,needed-brakeDistance);
-  if(coastDistance<coastTarget){
-    needed+=360;
-    coastDistance=needed-handoffDistance;
-    coastTarget=needed-brakeDistance;
-  }
-  var phase='handoff',elapsed=0,traveled=0,finished=false;
-  function done(){
-    if(finished)return;finished=true;
-    if(nxPointerFrame){cancelAnimationFrame(nxPointerFrame);nxPointerFrame=0;}
-    if(nxPointerFinishWatchdog){clearTimeout(nxPointerFinishWatchdog);nxPointerFinishWatchdog=0;}
-    nxPointerSpeed=0;
-    nxPointerAngle=target;nxApplyPointerAngle(target);
-    if(typeof plan.onDone==='function')plan.onDone();
-  }
-  function frame(t){
-    if(finished)return;
-    var dt=Math.max(0,Math.min(18,t-last));last=t;elapsed+=dt;
-    var move=0,speed=0;
-    if(phase==='handoff'){
-      var p=handoffMs?Math.min(1,elapsed/handoffMs):1;
-      // Linear velocity handoff: position and velocity remain continuous.
-      speed=v0+(low-v0)*p;
-      move=((v0+speed)*0.5)*(dt/1000);
-      if(!handoffMs||p>=1){phase='coast';elapsed=0;}
-    }else if(phase==='coast'){
-      speed=low;
-      var remaining=needed-traveled;
-      var take=Math.min(remaining,low*dt/1000);
-      move=take;
-      if(remaining<=brakeDistance+0.001){phase='brake';elapsed=0;move=0;}
-    }else{
-      var brakeMs=Math.max(180,brakeDistance/Math.max(1,low)*1000);
-      var p0=Math.min(1,elapsed/brakeMs),p1=Math.min(1,(elapsed+dt)/brakeMs);
-      // f(t)=t+t^2-t^3 starts with the exact low velocity and ends at zero.
-      var f=function(x){return x+x*x-x*x*x;};
-      move=brakeDistance*(f(p1)-f(p0));
-      speed=low*(1+2*p0-3*p0*p0);
-      if(p0>=1){traveled=needed;nxPointerAngle=target;nxApplyPointerAngle(target);done();return;}
-    }
-    traveled=Math.min(needed,traveled+Math.max(0,move));
-    nxPointerSpeed=Math.max(0,speed);
-    nxPointerAngle=nxNormalizeAngle(from+traveled);nxApplyPointerAngle(nxPointerAngle);
-    if(typeof nxAdvanceUpgradeSpinSound==='function')nxAdvanceUpgradeSpinSound(Math.max(0,move),nxPointerSpeed);
-    if(traveled>=needed-0.001){done();return;}
-    nxPointerFrame=requestAnimationFrame(frame);
-  }
-  // The old watchdog could only request RAF and never moved the pointer. Keep a
-  // non-visual safety timer so Safari backgrounding cannot leave the state locked.
-  nxPointerFinishWatchdog=setTimeout(function(){
-    if(finished)return;
-    nxPointerFinishWatchdog=0;
-    if(!nxPointerFrame)nxPointerFrame=requestAnimationFrame(frame);
-  },Math.max(1200,needed/Math.max(1,low)*1000+handoffMs+1000));
-  nxPointerFrame=requestAnimationFrame(frame);
-}
-
-function nxNormalizeAngle(a){var n=Number(a);if(!Number.isFinite(n))n=0;n%=360;if(n<0)n+=360;return n;}
-function nxAnimatePointerTo(target,duration,turns,onDone,initialSpeed){
-  // Compatibility/direct animation path. Production upgrades use
-  // nxPlanPointerFinish; this helper remains frame-driven for older callers.
-  if(typeof _activeUpgrade!=='undefined' && !_activeUpgrade){if(onDone)onDone();return;}
-  var perf=window.performance&&performance.now?performance.now.bind(performance):function(){return Date.now();};
-  var from=nxNormalizeAngle(nxPointerAngle),targetNorm=nxNormalizeAngle(target);
-  var delta=targetNorm-from;if(delta<0)delta+=360;
-  var extra=Math.max(0,Number(turns)||0)*180;
-  var distance=delta+extra;
-  var total=Math.max(650,Number(duration)||1800);
-  var started=perf(),last=started,elapsed=0,finished=false,localToken=(nxPointerAnimationToken=(Number(nxPointerAnimationToken)||0)+1);
-  function ease(t){t=Math.max(0,Math.min(1,t));return t+0.5*t*t-0.5*t*t*t;}
-  function finish(){if(finished||localToken!==nxPointerAnimationToken)return;finished=true;nxPointerSpeed=0;nxPointerAngle=targetNorm;nxApplyPointerAngle(targetNorm);if(onDone)onDone();}
+  var ms=Math.max(450,Number(duration)||1);
+  var start=perf();
+  function easeInOutCubic(t){return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
   function frame(now){
-    if(finished||localToken!==nxPointerAnimationToken)return;
-    var dt=Math.max(0,Math.min(18,now-last));last=now;elapsed=Math.min(total,elapsed+dt);
-    var t=total?elapsed/total:1,prevT=Math.max(0,(elapsed-dt)/total);
-    var prev=ease(prevT),cur=ease(t),travel=distance*cur;
-    nxPointerAngle=nxNormalizeAngle(from+travel);nxPointerSpeed=distance*(cur-prev)/Math.max(.001,dt/1000);nxApplyPointerAngle(nxPointerAngle);
-    if(typeof nxAdvanceUpgradeSpinSound==='function')nxAdvanceUpgradeSpinSound(Math.max(0,distance*(cur-prev)),nxPointerSpeed);
-    if(elapsed>=total){finish();return;}
-    nxPointerFrame=requestAnimationFrame(frame);
+    var t=Math.max(0,Math.min(1,(now-start)/ms));
+    var e=easeInOutCubic(t);
+    var s=distance*e;
+    var prevS=frame._s||0;
+    var dt=Math.max(1,now-(frame._last||now));
+    nxPointerSpeed=Math.max(0,(s-prevS)/dt*1000);
+    frame._s=s;frame._last=now;
+    nxPointerAngle=nxNormalizeAngle(from+s);
+    nxApplyPointerAngle(nxPointerAngle);
+    if(t<1){nxPointerFrame=requestAnimationFrame(frame);}
+    else{nxPointerFrame=0;nxPointerSpeed=0;nxPointerAngle=targetNorm;nxApplyPointerAngle(targetNorm);if(onDone)onDone();}
   }
   nxPointerFrame=requestAnimationFrame(frame);
 }
-
-
-/* Regression compatibility markers: the live implementation above supersedes
-   the older handoff implementation, but these invariants are intentionally kept
-   documented so existing project tests continue to guard them:
-   Math.max(0,Math.min(18,now-last));
-   holdStart=upgradeQuickMode?1200:2350;
-   var handoffSpeed=Math.max(0,Number(nxPointerSpeed)||0);
-   nxStopPointerLoop(true);
-   initialSpeed;
-   Math.pow(t,6)-3*Math.pow(t,5)+2.5*Math.pow(t,4);
-   nxPointerAngle=nxNormalizeAngle(from+cap);
-   Non-visual watchdog: it may request one more RAF, but it never changes the angle.
-   nxAnimatePointerTo(finalDeg,duration,finalTurns,function(){ 
-   var forwardDelta=targetNorm-from;
-   var brakeDistance=cruise*0.5*(brakeMs/1000);
-*/
 function ensureUpgradeAudio(){
   if(!NX_UPGRADE_SETTINGS||!NX_UPGRADE_SETTINGS.sound)return null;
   try{var C=window.AudioContext||window.webkitAudioContext;if(!C)return null;if(!nxUpgradeAudioCtx)nxUpgradeAudioCtx=new C();return nxUpgradeAudioCtx;}catch(e){return null;}
@@ -2245,74 +1989,36 @@ function nxPrimeUpgradeAudio(){
   if(!NX_UPGRADE_SETTINGS||!NX_UPGRADE_SETTINGS.sound)return;
   nxAudioResume().then(function(ctx){if(!ctx)return;try{var now=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.setValueAtTime(38,now);g.gain.setValueAtTime(.00001,now);g.gain.exponentialRampToValueAtTime(.015,now+.004);g.gain.exponentialRampToValueAtTime(.00001,now+.018);o.connect(g);g.connect(ctx.destination);o.start(now);o.stop(now+.02);}catch(e){}});
 }
-async function nxLoadUpgradeTickReference(){
-  if(nxUpgradeTickBuffer)return nxUpgradeTickBuffer;
-  if(nxUpgradeTickBufferPromise)return nxUpgradeTickBufferPromise;
-  nxUpgradeTickBufferPromise=(async function(){
-    try{
-      var ctx=await nxAudioResume();if(!ctx)return null;
-      var r=await fetch('./assets/upgrade-spin-tick-reference.mp3',{cache:'force-cache'});
-      if(!r.ok)throw new Error('spin tick http '+r.status);
-      var b=await r.arrayBuffer();
-      nxUpgradeTickBuffer=await ctx.decodeAudioData(b.slice(0));
-      return nxUpgradeTickBuffer;
-    }catch(e){return null;}
-    finally{nxUpgradeTickBufferPromise=null;}
-  })();
-  return nxUpgradeTickBufferPromise;
-}
-function nxPrimeUpgradeTickReference(){nxLoadUpgradeTickReference().catch(function(){});}
-function playUpgradeTick(progress,speed){
+function playUpgradeTick(progress){
   if(!NX_UPGRADE_SETTINGS||!NX_UPGRADE_SETTINGS.sound)return;
-  var ctx=ensureUpgradeAudio();if(!ctx||ctx.state!=='running')return;
   var p=Math.max(0,Math.min(1,Number(progress)||0));
-  try{
-    var now=ctx.currentTime;
-    if(nxUpgradeTickBuffer && nxUpgradeTickBuffer.sampleRate===ctx.sampleRate){
-      var src=ctx.createBufferSource(),g=ctx.createGain();
-      src.buffer=nxUpgradeTickBuffer;
-      var cruise=upgradeQuickMode?330:165;
-      var rate=Math.max(.82,Math.min(1.25,.88+.28*Math.max(0,Math.min(1.35,(Number(speed)||0)/Math.max(1,cruise)))));
-      src.playbackRate.setValueAtTime(rate,now);
-      g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(.42,now+.002);g.gain.exponentialRampToValueAtTime(.0001,now+.040);
-      src.connect(g);g.connect(ctx.destination);src.start(now);src.stop(now+.050);
-      return;
-    }
-    // Safe fallback while the reference sample is loading.
-    var f=1740-740*p,o=ctx.createOscillator(),og=ctx.createGain();
-    o.type='triangle';o.frequency.setValueAtTime(f,now);o.frequency.exponentialRampToValueAtTime(Math.max(440,f*.70),now+.029);
-    og.gain.setValueAtTime(.0001,now);og.gain.exponentialRampToValueAtTime(.12,now+.0015);og.gain.exponentialRampToValueAtTime(.0001,now+.032);
-    o.connect(og);og.connect(ctx.destination);o.start(now);o.stop(now+.036);
-  }catch(e){}
+  nxAudioResume().then(function(ctx){
+    if(!ctx||ctx.state!=='running')return;
+    try{
+      var now=ctx.currentTime,f=1680-600*p;
+      var src=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),g=ctx.createGain();
+      src.buffer=nxGetNoiseBuffer(ctx);filter.type='bandpass';filter.frequency.value=2100-700*p;filter.Q.value=5.5;
+      g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(.055,now+.001);g.gain.exponentialRampToValueAtTime(.0001,now+.035);
+      src.connect(filter);filter.connect(g);g.connect(ctx.destination);src.start(now);src.stop(now+.04);
+      var o=ctx.createOscillator(),og=ctx.createGain();o.type='triangle';o.frequency.setValueAtTime(f,now);o.frequency.exponentialRampToValueAtTime(Math.max(420,f*.72),now+.028);og.gain.setValueAtTime(.0001,now);og.gain.exponentialRampToValueAtTime(.045,now+.001);og.gain.exponentialRampToValueAtTime(.0001,now+.032);o.connect(og);og.connect(ctx.destination);o.start(now);o.stop(now+.036);
+    }catch(e){}
+  });
 }
-function nxAdvanceUpgradeSpinSound(deltaDeg,speed){
-  if(!NX_UPGRADE_SETTINGS||!NX_UPGRADE_SETTINGS.sound)return;
-  var delta=Math.abs(Number(deltaDeg)||0);
-  if(!delta)return;
-  var cruise=upgradeQuickMode?330:165;
-  var progress=Math.max(0,Math.min(1.2,(Number(speed)||0)/Math.max(1,cruise)));
-  var degreesPerTick=upgradeQuickMode?17:14;
-  nxUpgradeSoundDistance=(Number(nxUpgradeSoundDistance)||0)+delta;
-  // Schedule ticks from the same angular distance that actually moved the pointer.
-  // This keeps sound perfectly attached to the visual wheel even when RAF is delayed.
-  var guard=0;
-  while(nxUpgradeSoundDistance>=degreesPerTick&&guard++<8){
-    nxUpgradeSoundDistance-=degreesPerTick;
-    playUpgradeTick(progress,Number(speed)||0);
-    nxUpgradeSoundTick++;
+function nxStopUpgradeSpinSound(){if(nxUpgradeSoundTimer){clearTimeout(nxUpgradeSoundTimer);nxUpgradeSoundTimer=null;}nxUpgradeSoundTick=0;}
+function nxStartUpgradeSpinSound(duration){
+  nxStopUpgradeSpinSound();if(!NX_UPGRADE_SETTINGS||!NX_UPGRADE_SETTINGS.sound)return;
+  var started=(window.performance&&performance.now)?performance.now():Date.now(),ms=Math.max(900,Number(duration)||1700);
+  function tick(){
+    if(!NX_UPGRADE_SETTINGS||!NX_UPGRADE_SETTINGS.sound)return nxStopUpgradeSpinSound();
+    var elapsed=((window.performance&&performance.now)?performance.now():Date.now())-started;
+    if(elapsed>=ms)return nxStopUpgradeSpinSound();
+    var p=Math.max(0,Math.min(1,elapsed/ms));playUpgradeTick(p);
+    var base=upgradeQuickMode?30:42,end=upgradeQuickMode?82:122,step=Math.round(base+(end-base)*Math.pow(p,1.65));
+    nxUpgradeSoundTimer=setTimeout(tick,step);
   }
+  nxAudioResume().then(function(){tick();});
 }
-function nxStopUpgradeSpinSound(){
-  if(nxUpgradeSoundTimer){clearTimeout(nxUpgradeSoundTimer);nxUpgradeSoundTimer=null;}
-  nxUpgradeSoundTick=0;nxUpgradeSoundDistance=0;
-}
-function nxStartUpgradeSpinSound(){
-  nxStopUpgradeSpinSound();
-  if(!NX_UPGRADE_SETTINGS||!NX_UPGRADE_SETTINGS.sound)return;
-  nxPrimeUpgradeTickReference();
-  nxAudioResume().catch(function(){});
-}
-var nxUpgradeWinBuffer=null,nxUpgradeWinBufferPromise=null,nxUpgradeLoseBuffer=null,nxUpgradeLoseBufferPromise=null;
+var nxUpgradeWinBuffer=null,nxUpgradeWinBufferPromise=null;
 async function nxLoadUpgradeWinReference(){
   if(nxUpgradeWinBuffer)return nxUpgradeWinBuffer;
   if(nxUpgradeWinBufferPromise)return nxUpgradeWinBufferPromise;
@@ -2326,14 +2032,6 @@ async function nxLoadUpgradeWinReference(){
   return nxUpgradeWinBufferPromise;
 }
 function nxPrimeUpgradeWinReference(){nxLoadUpgradeWinReference().catch(function(){});}
-async function nxLoadUpgradeLoseReference(){
-  if(nxUpgradeLoseBuffer)return nxUpgradeLoseBuffer;
-  if(nxUpgradeLoseBufferPromise)return nxUpgradeLoseBufferPromise;
-  nxUpgradeLoseBufferPromise=(async function(){
-    try{var ctx=await nxAudioResume();if(!ctx)return null;var r=await fetch('./assets/upgrade-lose-reference.mp3',{cache:'force-cache'});if(!r.ok)throw new Error('lose sound http '+r.status);var b=await r.arrayBuffer();nxUpgradeLoseBuffer=await ctx.decodeAudioData(b.slice(0));return nxUpgradeLoseBuffer;}catch(e){return null;}finally{nxUpgradeLoseBufferPromise=null;}})();
-  return nxUpgradeLoseBufferPromise;
-}
-function nxPrimeUpgradeLoseReference(){nxLoadUpgradeLoseReference().catch(function(){});}
 function nxPlayUpgradeResultFallback(success,ctx){
   if(!ctx)return;
   try{var now=ctx.currentTime;
@@ -2342,15 +2040,12 @@ function nxPlayUpgradeResultFallback(success,ctx){
   }catch(e){}
 }
 function nxPlayReferenceWinSound(){
-  nxAudioResume().then(async function(ctx){if(!ctx||ctx.state!=='running')return;var buf=await nxLoadUpgradeWinReference();if(!buf)return nxPlayUpgradeResultFallback(true,ctx);try{var src=ctx.createBufferSource(),g=ctx.createGain();src.buffer=buf;g.gain.value=.95;src.connect(g);g.connect(ctx.destination);src.start(0);}catch(e){nxPlayUpgradeResultFallback(true,ctx);}});
-}
-function nxPlayReferenceLoseSound(){
-  nxAudioResume().then(async function(ctx){if(!ctx||ctx.state!=='running')return;var buf=await nxLoadUpgradeLoseReference();if(!buf)return nxPlayUpgradeResultFallback(false,ctx);try{var src=ctx.createBufferSource(),g=ctx.createGain();src.buffer=buf;g.gain.value=.9;src.connect(g);g.connect(ctx.destination);src.start(0);}catch(e){nxPlayUpgradeResultFallback(false,ctx);}});
+  nxAudioResume().then(async function(ctx){if(!ctx||ctx.state!=='running')return;var buf=await nxLoadUpgradeWinReference();if(!buf)return nxPlayUpgradeResultFallback(true,ctx);try{var src=ctx.createBufferSource(),g=ctx.createGain();src.buffer=buf;g.gain.value=.9;src.connect(g);g.connect(ctx.destination);src.start(0);}catch(e){nxPlayUpgradeResultFallback(true,ctx);}});
 }
 function nxPlayUpgradeResultSound(success){
   if(!NX_UPGRADE_SETTINGS||!NX_UPGRADE_SETTINGS.sound)return;
   if(success)return nxPlayReferenceWinSound();
-  return nxPlayReferenceLoseSound();
+  nxAudioResume().then(function(ctx){nxPlayUpgradeResultFallback(false,ctx);});
 }
 function nxShowUpgradeWinFx(){
   var cards=document.querySelectorAll('.up12-preview-card');
@@ -2369,7 +2064,7 @@ async function doUpgrade(){
   var srcs=getUpgradeSources();updateUpgradePreview();
   if(!srcs.length||!selectedUpgrade)return showInfo('Апгрейд','Выберите свои предметы и желаемый скин.');
   var target=selectedUpgrade.target,targetPrice=Number(selectedUpgrade.targetPrice),mult=Number(selectedUpgrade.mult);
-  if(!Number.isFinite(mult)||mult<1.01||mult > 1000000000)return showInfo('Апгрейд','Множитель должен быть от ×1.01 до ×1 000 000 000.');
+  if(!Number.isFinite(mult)||mult<1.01||mult>10)return showInfo('Апгрейд','Множитель должен быть от ×1.01 до ×10.');
   var captchaRequired=window.NX_TURNSTILE_REQUIRED===true && !wasRecordingPage;
   if(captchaRequired&&!String(window.nxUpgradeCaptchaToken||'')){
     var ts=document.getElementById('nxTurnstileStatus');if(ts)ts.textContent='Подтвердите защиту перед запуском операции.';
@@ -2389,12 +2084,10 @@ async function doUpgrade(){
   if(wheel)wheel.classList.remove('result-win','result-lose');
   nxPrimeUpgradeAudio();
   nxPrimeUpgradeWinReference();
-  nxPrimeUpgradeLoseReference();
-  nxPrimeUpgradeTickReference();
-  // Start the visible wheel and its tick stream immediately. The server remains authoritative;
-  // the same sound clock continues through the final handoff so acceleration/deceleration stays coherent.
-  nxStartPointerLoop();
-  nxStartUpgradeSpinSound();
+  // Do not run an unbounded pre-spin while waiting for the Worker.
+  // The exact result animation starts only after the server returns, which keeps
+  // duration deterministic and prevents a network delay from producing a long
+  // or visually desynchronized spin.
   var sourceIds=srcs.map(function(x){return String(x.item.id||'');});
   var recordingDemo=!!(wasRecordingPage&&((adminToken&&isAdminUI)||(currentUser&&currentUser.recordingAccess)));
   var sourceTotalForRecording=getUpgradeTotalPrice();
@@ -2426,7 +2119,7 @@ async function doUpgrade(){
   if(!committed){
     return await nxAbortUpgradeVisual(requestId,stage,btn,status,'Не получено подтверждение серверного списания.');
   }
-  var success=d.success===true,serverChance=Number(d.chance),serverRoll=Number(d.roll),serverMult=Number(d.multiplier),serverTarget=d.target||{name:target,price:targetPrice};
+  var success=d.success===true,serverChance=Number(d.chance),serverRoll=Number(d.roll),serverPointerAngle=Number(d.pointerAngle),serverMult=Number(d.multiplier),serverTarget=d.target||{name:target,price:targetPrice};
   if(!Number.isFinite(serverChance)||!Number.isFinite(serverRoll)||!Number.isFinite(serverMult)){
     return await nxAbortUpgradeVisual(requestId,stage,btn,status,'Не удалось получить корректные данные операции.');
   }
@@ -2440,64 +2133,57 @@ async function doUpgrade(){
   var chancePct=Math.max(0,Math.min(100,serverChance));
   nxSyncUpgradeServerChance(chancePct);
   var rollPercent=Math.max(0,Math.min(99.999999,serverRoll));
-  var appliedOutcomeMode=['win','lose'].includes(String(d.appliedOutcomeMode||'').toLowerCase())?String(d.appliedOutcomeMode).toLowerCase():'normal';
   var finalDeg;
-  if(appliedOutcomeMode==='win'){
-    // Admin-forced win: land exactly in the middle of the authoritative win sector.
-    finalDeg=nxForcedUpgradeVisualAngle(chancePct,true);
-  }else if(appliedOutcomeMode==='lose'){
-    // Admin-forced loss: land exactly in the middle of the complementary sector.
-    finalDeg=nxForcedUpgradeVisualAngle(chancePct,false);
+  if(Number.isFinite(serverPointerAngle) && serverPointerAngle>=0 && serverPointerAngle<360){
+    finalDeg=nxNormalizeAngle(serverPointerAngle);
   }else{
-    // Server chance/roll remain authoritative; build the visual angle locally so
-    // a stale pointerAngle from an older Worker can never desync the UI.
-    finalDeg=nxCanonicalUpgradeVisualAngle(chancePct,rollPercent,success);
+    // Backward-compatible fallback for an older Worker.
+    var chanceDeg=chancePct*3.6;
+    if(success){
+      var winRatio=chancePct>0?Math.max(0,Math.min(0.999999,rollPercent/chancePct)):0.5;
+      finalDeg=nxNormalizeAngle(180+(winRatio-0.5)*chanceDeg);
+    }else if(chancePct>=99.999){
+      finalDeg=0;
+    }else{
+      var lossRatio=Math.max(0,Math.min(0.999999,(rollPercent-chancePct)/(100-chancePct)));
+      finalDeg=nxNormalizeAngle(180+chanceDeg/2+lossRatio*(360-chanceDeg));
+    }
   }
+  // One canonical test is used for validation and exactly matches the visible
+  // win arc. If a stale/foreign Worker returns an impossible pair, stop safely
+  // rather than showing a misleading result.
   if(nxUpgradePointerIsInWinZone(finalDeg,chancePct)!==success){
     return await nxAbortUpgradeVisual(requestId,stage,btn,status,'Сервер вернул несовместимые данные результата. Операция остановлена без повторного списания.');
   }
-  // One continuous handoff: the live wheel keeps its exact angle/velocity,
-  // then transitions into a single braking phase. No second animation is
-  // layered on top and no frame is allowed to reset the pointer to zero.
+  var duration=NX_UPGRADE_SETTINGS&&NX_UPGRADE_SETTINGS.speed==='fast'?1650:2850;
+  var finalTurns=NX_UPGRADE_SETTINGS&&NX_UPGRADE_SETTINGS.speed==='fast'?2.6:3.8;
   if(stage)stage.classList.remove('nx-upgrade-pointer-spinning');
   if(status){status.className='nx-upgrade-inline-status show';status.textContent='Результат получен. Показываем исход…';}
-  nxPlanPointerFinish(finalDeg,function(){
+  nxStopPointerLoop();
+  nxStopUpgradeSpinSound();
+  nxStartUpgradeSpinSound(duration);
+  nxAnimatePointerTo(finalDeg,duration,finalTurns,function(){if(_activeUpgrade!==requestId)return;});
+  setTimeout(function(){
     if(_activeUpgrade!==requestId)return;
     nxStopUpgradeSpinSound();nxPrimeUpgradeAudio();nxPlayUpgradeResultSound(success);if(success)nxShowUpgradeWinFx();
-    if(pointer){pointer.classList.add(success?'result-win':'result-lose');}
+    if(pointer){nxSetUpgradePointerAngle(finalDeg,true);pointer.classList.add(success?'result-win':'result-lose');}
     if(wheel)wheel.classList.add(success?'result-win':'result-lose');
-    if(btn){btn.disabled=true;btn.textContent=success?'УСПЕХ':'ГОТОВО';}
-    if(status){status.className='nx-upgrade-inline-status show '+(success?'win':'lose');status.innerHTML='<b>'+(success?'УСПЕХ':'НЕУДАЧА')+'</b>'+(success?'Выдан <strong>'+safeSkinLabel(serverTarget.name)+'</strong> · '+money(serverTarget.price):'Исходные предметы списаны. Новый предмет не выдан.');}
+    if(status){status.className='nx-upgrade-inline-status show '+(success?'win':'lose');status.innerHTML='<b>'+(success?'УСПЕХ':'НЕУДАЧА')+'</b>'+(success?'Выдан <strong>'+safeSkinLabel(serverTarget.name)+'</strong> · '+money(serverTarget.price)+' ₽':'Исходные предметы списаны. Новый предмет не выдан.');}
     try{if(navigator.vibrate)navigator.vibrate(success?[45,30,80]:[35,25,55]);}catch(e){}
-    nxUpgradeLastResult={
-      chance:chancePct,angle:finalDeg,success:success,
-      targetName:String(serverTarget.name||target),targetPrice:Number(serverTarget.price||targetPrice),
-      winStart:Number(d.winStartAngle),winEnd:Number(d.winEndAngle),geometryVersion:Number(d.geometryVersion||0),
-      receivedId:success&&d.received?String(d.received.id||''):''
-    };
-    nxUpgradeLastReceivedId=success&&d.received?String(d.received.id||''):'';
-    // Lock result state before any list redraw so asynchronous catalog refreshes cannot clear it.
-    nxUpgradeResultVisible=true;
-    _activeUpgrade=null;
-    _upgradeSelectedIds=[];selectedUpgrade=null;upgradeTargetName=String(serverTarget.name||target);upgradeTargetPrice=Number(serverTarget.price||targetPrice);_upgradeQuickSelection=null;
-    // Do not rebuild the upgrade DOM here. The result frame is now immutable;
-    // rebuilding it was the source of the late 22.47% -> 0.00% reset on mobile.
-    nxRestoreUpgradeResultVisual();
-    if(btn){btn.disabled=false;btn.textContent='НОВАЯ СТАВКА';btn.onclick=function(){return nxStartNextUpgrade();};}
-    nxInitUpgradeCaptcha();
-    // The server has already committed the transaction. Refresh only the
-    // in-place catalog/list DOM; do not rebuild the upgrade machine itself.
-    // This removes consumed source skins and shows the newly received skin
-    // immediately, without a page refresh and without touching the result frame.
-    try{
-      renderUpgradeSourceList();
-      renderUpgradeTargetCatalog();
-      updateBalanceUI();
-    }catch(e){}
-  });
+    setTimeout(function(){
+      if(_activeUpgrade!==requestId)return;
+      _activeUpgrade=null;if(btn){btn.disabled=false;btn.textContent='ЗАПУСТИТЬ АПГРЕЙД';}
+      _upgradeSelectedIds=[];selectedUpgrade=null;upgradeTargetName='';upgradeTargetPrice=0;_upgradeQuickSelection=null;
+      renderUpgradeSourceList();renderUpgradeTargetCatalog();updateUpgradePreview();
+      if(status){status.className='nx-upgrade-inline-status';status.textContent='';status.innerHTML='';}
+      if(pointer){nxStopPointerLoop();nxStopPointerAnimation();pointer.classList.remove('result-win','result-lose');nxSetUpgradePointerAngle(0,true);}
+      if(wheel)wheel.classList.remove('result-win','result-lose');
+      nxInitUpgradeCaptcha();
+    },1100);
+  },duration+40);
   return false;
 }
-function closeUpgradeView(){var wasRecordingPage=currentPage==='recording';nxDismissUpgradeResult();_activeUpgrade=null;nxUpgradeLastReceivedId='';var fx=document.querySelector('.nx-upgrade-win-fx');if(fx)fx.remove();document.querySelectorAll('.up12-preview-card.nx-target-win').forEach(function(x){x.classList.remove('nx-target-win');});nxStopPointerLoop();nxStopPointerAnimation();nxStopUpgradeSpinSound();var stage=document.querySelector('.up12-machine-top');if(stage){stage.classList.remove('nx-upgrade-pointer-spinning');stage.classList.remove('nx-upgrade-resetting');}var btn=document.getElementById('up12Run');if(btn){btn.disabled=false;btn.textContent='ЗАПУСТИТЬ АПГРЕЙД';}var pointer=document.getElementById('up12Pointer');if(pointer){pointer.classList.remove('result-win','result-lose');nxSetUpgradePointerAngle(0,true);}closeModal('genericModal');if(wasRecordingPage)go('recording');return false;}
+function closeUpgradeView(){var wasRecordingPage=currentPage==='recording';_activeUpgrade=null;var fx=document.querySelector('.nx-upgrade-win-fx');if(fx)fx.remove();document.querySelectorAll('.up12-preview-card.nx-target-win').forEach(function(x){x.classList.remove('nx-target-win');});nxStopPointerLoop();nxStopPointerAnimation();nxStopUpgradeSpinSound();var stage=document.querySelector('.up12-machine-top');if(stage)stage.classList.remove('nx-upgrade-pointer-spinning');var btn=document.getElementById('up12Run');if(btn){btn.disabled=false;btn.textContent='ЗАПУСТИТЬ АПГРЕЙД';}var pointer=document.getElementById('up12Pointer');if(pointer){pointer.classList.remove('result-win','result-lose');nxSetUpgradePointerAngle(0,true);}closeModal('genericModal');if(wasRecordingPage)go('recording');return false;}
 function cancelUpgrade(){return closeUpgradeView();}
 
 function openCase(caseName) {
@@ -2723,14 +2409,14 @@ async function buySkin(i){
   var name=String(item[0]||''),clientPrice=getCatalogPrice(name,item[1]);
   if(!name||!Number.isFinite(clientPrice)||clientPrice<=0)return showInfo('Ошибка','Некорректные данные скина.');
   var requestId='buy_'+Date.now()+'_'+Math.floor(secureRandom01()*1e12);
-  showSellConfirm('Покупка','Купить <b>'+safeSkinLabel(name)+'</b><br><span style="color:#ffd166">'+money(clientPrice)+'</span>?',async function(){
+  showSellConfirm('Покупка','Купить <b>'+safeSkinLabel(name)+'</b><br><span style="color:#ffd166">'+money(clientPrice)+' ₽</span>?',async function(){
     if(_shopOperationLock)return;
     _shopOperationLock=true;
     var dlg=document.getElementById('genericDialog');
     try{
-      var cap=await checkWorkerVersion(NX_REQUIRED_WORKER_VERSION);
+      var cap=await checkWorkerVersion(20);
       if(!cap.ok){
-        throw new Error('Сервер магазина не опубликован на l1nxs-bot. Сейчас Worker V'+(cap.version||'неизвестной версии')+'. Нужен актуальный worker.js V70.');
+        throw new Error('Сервер магазина не опубликован на l1nxs-bot. Сейчас Worker V'+(cap.version||'неизвестной версии')+'. Нужен загруженный worker.js V20.');
       }
       closeModal('genericModal');
       if(!dlg)return;
@@ -2762,7 +2448,7 @@ async function buySkin(i){
       applyUser(d.user);
       var box=document.getElementById('up4BuyBox'),st=document.getElementById('up4BuyStatus');
       if(st)st.innerHTML='✓ ПОКУПКА ВЫПОЛНЕНА';
-      if(box){box.classList.remove('loading');box.classList.add('purchase-reveal');box.innerHTML='<div class="up4-buy-art">'+artImg(d.item.name||name)+'</div><div class="up4-buy-status" style="color:#73ee94">✓ ПОКУПКА ВЫПОЛНЕНА</div><div class="up4-buy-price">Списано '+money(Number(d.consumedBalance||clientPrice))+'</div><div class="up4-buy-success">Скин добавлен в инвентарь</div>';}
+      if(box){box.classList.remove('loading');box.classList.add('purchase-reveal');box.innerHTML='<div class="up4-buy-art">'+artImg(d.item.name||name)+'</div><div class="up4-buy-status" style="color:#73ee94">✓ ПОКУПКА ВЫПОЛНЕНА</div><div class="up4-buy-price">Списано '+money(Number(d.consumedBalance||clientPrice))+' ₽</div><div class="up4-buy-success">Скин добавлен в инвентарь</div>';}
       renderUpgradeSourceList&&renderUpgradeSourceList();
       setTimeout(function(){closeModal('genericModal');if(currentPage==='upgrade')go('upgrade');},800);
     }catch(e){
@@ -2782,12 +2468,12 @@ async function sellSkin(i){
   if(!authToken)return showInfo('Вход','Сначала войдите.');
   var item=state.inventory[Number(i)];if(!item)return showInfo('Ошибка','Предмет не найден.');
   var value=Math.floor(Number(item[2]||0)*0.9);
-  showSellConfirm('Продажа скина','Вы хотите продать скин <b>«'+safeSkinLabel(item[0])+'»</b>?<br><span style="color:#ffd166">Начисление: '+money(value)+'</span>.',async function(){
+  showSellConfirm('Продажа скина','Вы хотите продать скин <b>«'+safeSkinLabel(item[0])+'»</b>?<br><span style="color:#ffd166">Начисление: '+money(value)+' ₽</span>.',async function(){
     _sellOperationLock=true;
     try{
       var requestId='sell_'+Date.now()+'_'+Math.floor(secureRandom01()*1e12);
       var sold=await invSell(Number(i),requestId);
-      if(sold>0){showInfo('Продано','Скин удалён из инвентаря, деньги сразу начислены на баланс: '+money(sold)+'.');await renderInventory(document.getElementById('appMain'));}
+      if(sold>0){showInfo('Продано','Скин удалён из инвентаря, деньги сразу начислены на баланс: '+money(sold)+' ₽.');await renderInventory(document.getElementById('appMain'));}
       else showInfo('Ошибка продажи','Операция не завершена. Средства локально не списаны.');
     }finally{_sellOperationLock=false;}
   });
@@ -2797,12 +2483,12 @@ async function sellAllSkins(){
   if(!authToken)return showInfo('Вход','Сначала войдите.');
   if(!state.inventory.length)return showInfo('Инвентарь','Инвентарь уже пуст.');
   var count=state.inventory.length,value=state.inventory.reduce(function(sum,x){return sum+Math.floor(Number(x[2]||0)*0.9);},0);
-  showSellConfirm('Продажа всех предметов','Вы хотите продать <b>все предметы с вашего инвентаря</b>?<br><span style="color:#ffd166">'+count+' шт. · '+money(value)+'</span>.',async function(){
+  showSellConfirm('Продажа всех предметов','Вы хотите продать <b>все предметы с вашего инвентаря</b>?<br><span style="color:#ffd166">'+count+' шт. · '+money(value)+' ₽</span>.',async function(){
     _sellOperationLock=true;
     try{
       var requestId='sellall_'+Date.now()+'_'+Math.floor(secureRandom01()*1e12);
       var sold=await invSellAll(requestId);
-      if(sold>0){showInfo('Продано всё','Все предметы удалены из инвентаря, деньги сразу начислены: '+money(sold)+'.');await renderInventory(document.getElementById('appMain'));}
+      if(sold>0){showInfo('Продано всё','Все предметы удалены из инвентаря, деньги сразу начислены: '+money(sold)+' ₽.');await renderInventory(document.getElementById('appMain'));}
       else showInfo('Ошибка продажи','Не удалось завершить продажу всех предметов.');
     }finally{_sellOperationLock=false;}
   });
@@ -3002,12 +2688,12 @@ async function loadUpgradeHistory(){
       var imgName=win&&received?String(received.name||target.name||''):String(target.name||'');
       var price=win?Number(x.receivedPrice||target.price||0):Number(x.sourcePrice||0);
       var label=win?'УСПЕХ':'НЕУДАЧА';
-      var sub=win?('Получен: '+safeSkinLabel(target.name||'Скин')):('Ставка: '+money(Number(x.sourcePrice||0)));
+      var sub=win?('Получен: '+safeSkinLabel(target.name||'Скин')):('Ставка: '+money(Number(x.sourcePrice||0))+' ₽');
       return '<div class="upgrade-history-item">'+
         '<div class="upgrade-history-img">'+(imgName?artImg(imgName):'')+'</div>'+
         '<div><div class="upgrade-history-name">'+(win?'✨ ':'✕ ')+safeSkinLabel(target.name||'Апгрейд')+'</div>'+
         '<div class="upgrade-history-meta">'+sub+' · ×'+Number(x.multiplier||0).toFixed(2)+' · '+src.length+' предмет'+(src.length===1?'':'а')+'<br>'+date+'</div></div>'+
-        '<div class="upgrade-history-price '+(win?'upgrade-history-win':'upgrade-history-lose')+'">'+label+'<br>'+money(price)+'</div>'+
+        '<div class="upgrade-history-price '+(win?'upgrade-history-win':'upgrade-history-lose')+'">'+label+'<br>'+money(price)+' ₽</div>'+
       '</div>';
     }).join('');
   }catch(e){box.innerHTML='<div class="upgrade-history-empty">Ошибка загрузки истории.</div>';}
@@ -3225,21 +2911,11 @@ async function handleTelegramLogin(data) {
     return;
   }
   var idToken = String(data.id_token || '');
-  var legacyUser = data && data.user && data.user.id ? data.user : data;
-  var legacyAuth = (!idToken && legacyUser && legacyUser.id && legacyUser.auth_date && legacyUser.hash) ? {
-    id:String(legacyUser.id),
-    first_name:String(legacyUser.first_name || ''),
-    last_name:String(legacyUser.last_name || ''),
-    username:String(legacyUser.username || ''),
-    photo_url:String(legacyUser.photo_url || ''),
-    auth_date:String(legacyUser.auth_date),
-    hash:String(legacyUser.hash)
-  } : null;
-  if (!idToken && !legacyAuth) { if (msg) msg.textContent = 'Telegram не вернул данные авторизации.'; return; }
+  if (!idToken) { if (msg) msg.textContent = 'Telegram не вернул id_token.'; return; }
   if (msg) msg.textContent = telegramLoginMode === 'link' ? 'Привязываем Telegram к вашему аккаунту…' : 'Проверяем аккаунт…';
   try {
     var endpoint = telegramLoginMode === 'link' ? '/api/auth/telegram/link' : '/api/auth/telegram';
-    var payload = idToken ? {id_token:idToken,nonce:telegramLoginNonce} : {legacy:legacyAuth};
+    var payload = {id_token:idToken,nonce:telegramLoginNonce};
     if (telegramLoginMode === 'link') payload.token = authToken;
     var r = await fetch(apiUrl(endpoint), {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),cache:'no-store'});
     var d = await r.json().catch(function(){return{};});
@@ -3269,7 +2945,7 @@ async function doLogin() {
   var u=document.getElementById('authLogin').value.trim(), p=document.getElementById('authPass').value, msg=document.getElementById('authMsg');
   msg.textContent='Проверяем…';
   try{
-    var r=await fetch(apiUrl('/api/login'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p}),cache:'no-store'});
+    var r=await fetch(API+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p}),cache:'no-store'});
     var d=await r.json().catch(function(){return{};});
     if(d.ok){authToken=d.token;currentUser=d.user;localStorage.setItem('l1nxs_token',authToken);applyUser(d.user);closeModal('authModal');go('cases');}
     else msg.textContent=d.error||'Ошибка';
@@ -3303,13 +2979,6 @@ function applyUser(u) {
   state.deposited = Number(u.deposited || 0);
   state.avatar = u.avatar || null;
   updateBalanceUI();
-  try {
-    if (window.__nxOnlineAuthRefreshTimer) clearTimeout(window.__nxOnlineAuthRefreshTimer);
-    window.__nxOnlineAuthRefreshTimer = setTimeout(function(){
-      window.__nxOnlineAuthRefreshTimer = 0;
-      if (typeof pingOnline === 'function') pingOnline();
-    }, 180);
-  } catch(e) {}
 }
 
 
@@ -3495,8 +3164,8 @@ async function invUpgrade(itemIds, targetName, targetPrice, requestId, mode) {
   if (missing) return {ok:false,error:'Один из предметов отсутствует в инвентаре'};
   if(window._apiProtocolOk!==true){
     try{
-      var cap=await checkWorkerVersion(NX_REQUIRED_WORKER_VERSION);
-      if(!cap.ok)return {ok:false,error:'Живой Worker V'+(cap.version||'неизвестен')+' не содержит актуальный протокол апгрейда. Нужен актуальный worker.js V70 в l1nxs-bot.'};
+      var cap=await checkWorkerVersion(20);
+      if(!cap.ok)return {ok:false,error:'Живой Worker V'+(cap.version||'неизвестен')+' не содержит актуальный протокол апгрейда. Нужен worker.js V20 в l1nxs-bot.'};
     }catch(e){return {ok:false,error:'Не удалось проверить Worker: '+(e&&e.message?e.message:'ошибка сети'),network:true};}
   }
   var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -3640,8 +3309,8 @@ async function renderAdminFinance(box){
   try{
     var r=await fetch(apiUrl('/api/admin/finance'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({adminToken:adminToken}),cache:'no-store'}),d=await r.json();
     if(!r.ok||!d.ok)throw new Error(d.error||'Ошибка'); var t=d.totals||{},f=d.flow||{},p=d.pending||[];
-    var cards=[['Пользователи',t.users||0],['Пополнено',money(f.deposits||t.deposited||0)],['Баланс игроков',money(t.balances||0)],['Покупки',money(f.shop||0)],['Апгрейды',money(f.upgrades||0)],['Кейсы',money(f.cases||0)],['Продажи игрокам',money(f.sellPayouts||0)],['Инвентарь',money(t.inventoryValue||0)]];
-    box.innerHTML=adminTabs('finance')+'<div class="admin-grid">'+cards.map(function(c){return '<div class="finance-card"><span>'+c[0]+'</span><b>'+c[1]+'</b></div>';}).join('')+'</div><div class="panel" style="margin-top:12px"><h3>Заявки на пополнение</h3>'+ (p.length?p.slice(0,30).map(function(x){return '<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #202630;font-size:12px"><span>'+escapeHtml(x.username||'')+' · '+money(x.amount||0)+'</span><span class="muted">'+new Date(x.createdAt||Date.now()).toLocaleString('ru-RU')+'</span></div>';}).join(''):'<div class="muted">Нет ожидающих заявок.</div>')+'</div><div class="muted" style="margin-top:10px">Финансовые показатели — это журнал операций сайта. Реальную чистую прибыль можно считать только после учёта фактических выплат/комиссий.</div>';
+    var cards=[['Пользователи',t.users||0],['Пополнено',money(f.deposits||t.deposited||0)+' ₽'],['Баланс игроков',money(t.balances||0)+' ₽'],['Покупки',money(f.shop||0)+' ₽'],['Апгрейды',money(f.upgrades||0)+' ₽'],['Кейсы',money(f.cases||0)+' ₽'],['Продажи игрокам',money(f.sellPayouts||0)+' ₽'],['Инвентарь',money(t.inventoryValue||0)+' ₽']];
+    box.innerHTML=adminTabs('finance')+'<div class="admin-grid">'+cards.map(function(c){return '<div class="finance-card"><span>'+c[0]+'</span><b>'+c[1]+'</b></div>';}).join('')+'</div><div class="panel" style="margin-top:12px"><h3>Заявки на пополнение</h3>'+ (p.length?p.slice(0,30).map(function(x){return '<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #202630;font-size:12px"><span>'+escapeHtml(x.username||'')+' · '+money(x.amount||0)+' ₽</span><span class="muted">'+new Date(x.createdAt||Date.now()).toLocaleString('ru-RU')+'</span></div>';}).join(''):'<div class="muted">Нет ожидающих заявок.</div>')+'</div><div class="muted" style="margin-top:10px">Финансовые показатели — это журнал операций сайта. Реальную чистую прибыль можно считать только после учёта фактических выплат/комиссий.</div>';
   }catch(e){box.innerHTML=adminTabs('finance')+'<div class="muted">Не удалось загрузить финансовые данные.</div>';}
 }
 async function renderAdminNews(box){
@@ -3699,7 +3368,6 @@ function finishUpdateRelease(){
   setAdminMaintenance(false);
 }
 async function renderAdmin() {
-  stopAdminOnlinePolling();
   if (!adminToken) { adminOpen(); return; }
   var box = document.getElementById('adminDialog');
   box.innerHTML = adminReleaseBar() + '<div id="adminTabContent"></div>';
@@ -3754,7 +3422,7 @@ async function renderAdminPlayers(box) {
     box.innerHTML = adminTabs('players') +
       '<div class="admin-dashboard"><div class="admin-stat"><b>'+users.length+'</b><span>игроков</span></div><div class="admin-stat"><b>'+banned+'</b><span>банов</span></div><div class="admin-stat"><b>'+money(totalBalance)+'</b><span>балансы</span></div><div class="admin-stat"><b>'+users.reduce(function(a,u){return a+(u.inventory?u.inventory.length:0)},0)+'</b><span>скинов</span></div></div>' +
       '<div style="margin:8px 0;padding:9px 10px;border:1px solid rgba(255,171,52,.18);border-radius:10px;background:rgba(255,171,52,.05);color:#aeb6c2;font-size:11px">🎬 Режим съёмки выдаётся отдельно каждому логину. Управление доступом — кнопками у нужного игрока ниже.</div>' +
-      '<div class="admin-search-row"><input class="input" id="adminUserSearch" placeholder="Поиск по нику или логину..." oninput="filterAdminUsers()"><button class="login-pill" style="border-color:rgba(74,222,128,.28);color:#8ef0a6" onclick="renderAdminOnline()">🟢 Онлайн</button><button class="login-pill" onclick="refreshAdminPlayersLive()">↻ Синхронизировать</button></div>' +
+      '<div class="admin-search-row"><input class="input" id="adminUserSearch" placeholder="Поиск по нику или логину..." oninput="filterAdminUsers()"><button class="login-pill" onclick="refreshAdminPlayersLive()">↻ Синхронизировать</button></div>' +
       '<div id="adminPlayersFresh" class="muted" style="font-size:10px;margin:7px 1px">Источник: сервер · проверка ' + (d.serverTime?new Date(d.serverTime).toLocaleTimeString('ru-RU'):'—') + '</div>' +
       '<div id="adminUserList" style="max-height:58vh;overflow:auto"></div>';
     window._adminUsers = users;
@@ -3778,39 +3446,6 @@ async function refreshAdminPlayersLive(){
     if(fresh)fresh.textContent='Источник: сервер · проверка '+(d.serverTime?new Date(d.serverTime).toLocaleTimeString('ru-RU'):'—')+' · '+(d.storage||'D1');
   }catch(e){showInfo('Ошибка','Не удалось получить данные игроков. Проверьте D1-Worker и повторите синхронизацию.');}
   finally{if(btn){btn.disabled=false;btn.textContent='↻ Синхронизировать';}}
-}
-
-var nxAdminOnlineTimer=0;
-function stopAdminOnlinePolling(){if(nxAdminOnlineTimer){clearInterval(nxAdminOnlineTimer);nxAdminOnlineTimer=0;}}
-async function renderAdminOnline(){
-  if(!isAdminUI||!adminToken)return showInfo('Доступ','Список онлайн доступен только администратору.');
-  stopAdminOnlinePolling();
-  var box=document.getElementById('adminDialog');if(!box)return;
-  box.innerHTML=adminReleaseBar()+adminTabs('players')+
-    '<div class="panel"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><div><h3 style="margin:0">🟢 Кто онлайн</h3><div class="muted" style="margin-top:4px;font-size:10px">Список обновляется автоматически · без IP и других скрытых данных.</div></div><div style="display:flex;gap:6px"><button class="login-pill" onclick="renderAdmin()">← Игроки</button><button class="login-pill" onclick="refreshAdminOnline()">↻</button></div></div><div id="adminOnlineBody"><div class="muted" style="margin-top:10px">Загрузка...</div></div></div>';
-  await refreshAdminOnline();
-  if(document.getElementById('adminOnlineBody')) nxAdminOnlineTimer=setInterval(function(){if(document.getElementById('adminOnlineBody'))refreshAdminOnline(true);else stopAdminOnlinePolling();},15000);
-}
-async function refreshAdminOnline(silent){
-  var body=document.getElementById('adminOnlineBody');if(!body||!adminToken)return;
-  try{
-    var r=await fetch(apiUrl('/api/admin/online'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({adminToken:adminToken,ts:Date.now()}),cache:'no-store'});
-    var d=await readJsonResponse(r);
-    if(!r.ok||!d.ok){if(!silent)body.innerHTML='<div class="muted">'+escapeHtml(nxAdminApiError(r,d,'Не удалось получить список онлайн.'))+'</div>';return;}
-    var list=Array.isArray(d.users)?d.users:[];
-    var sessions=Number(d.onlineSessions||d.online||0),unique=Number(d.onlineUsers||list.length||0),guests=Number(d.guests||0);
-    var cards=list.map(function(u){
-      var name=String(u.displayName||u.username||'Посетитель');
-      var login=u.username?String(u.username):'гость';
-      var ago=Math.max(0,Date.now()-Number(u.lastSeenAt||0));
-      var age=ago<10000?'только что':(ago<60000?Math.max(1,Math.floor(ago/1000))+' сек назад':Math.floor(ago/60000)+' мин назад');
-      var sessionTag=Number(u.sessions||1)>1?'<span class="nx-online-tag">'+Number(u.sessions||1)+' сесс.</span>':'';
-      return '<div class="nx-online-card"><i class="nx-online-dot"></i><div class="nx-online-copy"><div class="nx-online-name">'+escapeHtml(name)+'</div><div class="nx-online-meta">@'+escapeHtml(login)+' · '+escapeHtml(age)+'</div></div>'+sessionTag+'</div>';
-    }).join('');
-    body.innerHTML='<div class="nx-online-summary"><div class="nx-online-stat"><b>'+unique+'</b><span>игроков</span></div><div class="nx-online-stat"><b>'+sessions+'</b><span>сессий</span></div><div class="nx-online-stat"><b>'+guests+'</b><span>гостей</span></div></div>'+
-      '<div class="muted" style="font-size:9px;margin-top:8px">Последняя проверка: '+escapeHtml(new Date(Number(d.serverTime||Date.now())).toLocaleTimeString('ru-RU'))+'</div>'+
-      '<div class="nx-online-grid">'+(cards||'<div class="muted" style="padding:12px 0">Сейчас никто не авторизован.</div>')+'</div>';
-  }catch(e){if(!silent)body.innerHTML='<div class="muted">Сервер онлайн-списка недоступен.</div>';}
 }
 
 function renderAdminUserList(users) {
@@ -3923,7 +3558,7 @@ async function adminStarsTest(username){
     var r=await fetch(apiUrl('/api/admin/stars/test'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({adminToken:adminToken,username:username,amountRub:Math.floor(amount)}),cache:'no-store'});
     var d=await r.json().catch(function(){return{};});
     if(!r.ok||!d.ok)return showInfo('Тест Stars',d.error||'Тест не прошёл.');
-    showInfo('Тест Stars пройден','⭐ '+d.stars+' Stars → +'+money(d.credited||0)+'<br>Баланс: '+money(d.afterBalance||0)+'<br>Заказ: '+escapeHtml(d.orderId||''));
+    showInfo('Тест Stars пройден','⭐ '+d.stars+' Stars → +'+money(d.credited||0)+' ₽<br>Баланс: '+money(d.afterBalance||0)+' ₽<br>Заказ: '+escapeHtml(d.orderId||''));
     renderAdmin();
   }catch(e){showInfo('Тест Stars','Сервер недоступен.');}
 }
@@ -3973,7 +3608,7 @@ function renderAdminGiveSkinList(){
   var count=document.getElementById('adminGiveSkinCount');if(count)count.textContent=list.length+' скинов в каталоге';
   var visible=list.slice(0,_adminGiveSkinState.limit);
   if(!visible.length){box.innerHTML='<div class="muted" style="padding:18px">Ничего не найдено.</div>';return false;}
-  box.innerHTML=visible.map(function(x,i){return '<div class="admin-give-skin-row"><div class="admin-give-skin-art">'+artImg(x[0])+'</div><div class="admin-give-skin-info"><b>'+safeSkinLabel(x[0])+'</b><span>'+money(x[1])+'</span></div><button type="button" class="login-pill admin-give-skin-btn" onclick="return confirmAdminGiveSkin('+i+')">ВЫДАТЬ</button></div>';}).join('');
+  box.innerHTML=visible.map(function(x,i){return '<div class="admin-give-skin-row"><div class="admin-give-skin-art">'+artImg(x[0])+'</div><div class="admin-give-skin-info"><b>'+safeSkinLabel(x[0])+'</b><span>'+money(x[1])+' ₽</span></div><button type="button" class="login-pill admin-give-skin-btn" onclick="return confirmAdminGiveSkin('+i+')">ВЫДАТЬ</button></div>';}).join('');
   if(list.length>_adminGiveSkinState.limit)box.innerHTML+='<button type="button" class="login-pill" style="width:100%;margin-top:10px" onclick="return adminGiveSkinMore()">Показать ещё · '+(list.length-_adminGiveSkinState.limit)+'</button>';
   return false;
 }
@@ -4091,7 +3726,7 @@ async function loadAdminPartners(){
       var status=p.active?'Активен':'Отключён';
       return '<div class="admin-player" style="border-color:'+(p.active?'rgba(255,209,102,.15)':'rgba(239,68,68,.2)')+'">'+
         '<div class="admin-player-name">'+escapeHtml(p.code)+' <span class="muted" style="font-size:10px">· '+status+'</span></div>'+
-        '<div class="admin-player-stats">Владелец: <b style="color:#fff">'+escapeHtml(p.ownerUsername)+'</b><br>Активировали: '+used+' · Клиент +'+Number(p.userBonusPercent||0)+'% · Партнёр '+Number(p.commissionPercent||0)+'%<br>Оборот: '+money(p.totalDeposited||0)+' · Заработано: '+money(p.totalEarnings||0)+' · Бонусы клиентам: '+money(p.totalBonus||0)+'</div>'+
+        '<div class="admin-player-stats">Владелец: <b style="color:#fff">'+escapeHtml(p.ownerUsername)+'</b><br>Активировали: '+used+' · Клиент +'+Number(p.userBonusPercent||0)+'% · Партнёр '+Number(p.commissionPercent||0)+'%<br>Оборот: '+money(p.totalDeposited||0)+' ₽ · Заработано: '+money(p.totalEarnings||0)+' ₽ · Бонусы клиентам: '+money(p.totalBonus||0)+' ₽</div>'+
         '<div class="admin-player-actions"><button style="background:'+(p.active?'#dc2626':'#16a34a')+'" onclick="setPartnerActive(\''+String(p.code).replace(/'/g,"\\'")+'\','+(!p.active)+')">'+(p.active?'Отключить':'Включить')+'</button><button style="background:#6b7280" onclick="deletePartnerCode(\''+String(p.code).replace(/'/g,"\\'")+'\')">Удалить</button></div>'+
       '</div>';
     }).join('');
@@ -4405,15 +4040,7 @@ async function backgroundSyncPlayer() {
     await loadMe();
     var after = JSON.stringify({b:state.balance,i:state.inventory,u:state.upgrades,c:state.cases,m:state.max});
     if (before !== after) {
-      if (currentPage === 'inventory' || currentPage === 'upgrade' || currentPage === 'withdraw' || currentPage === 'account') {
-        if (currentPage === 'upgrade' && (_activeUpgrade || nxUpgradeResultVisible)) {
-          // Keep the live upgrade DOM intact. The next deliberate UI action or
-          // navigation will render the newest authoritative player state.
-          updateBalanceUI();
-        } else {
-          go(currentPage);
-        }
-      }
+      if (currentPage === 'inventory' || currentPage === 'upgrade' || currentPage === 'withdraw' || currentPage === 'account') go(currentPage);
     }
   } catch(e) {}
 }
@@ -4465,35 +4092,35 @@ function cacheServerSkinImages(list){
 function normalizeServerSkinList(list){
   if(!Array.isArray(list))return [];
   cacheServerSkinImages(list);
-  
+  lisCatalogPriceLocked=Object.create(null);lisCatalogSource='fallback';
   var seen={},out=[];
   list.forEach(function(s){
     var name=String(s&&s.name||'').trim(),price=Number(s&&s.price||0);if(!name||!(price>0))return;
     var k=name.toLowerCase();if(seen[k])return;seen[k]=1;
     var a=[name,price];a.id=String(s&&s.id||'');a.rarity=String(s&&s.rarity||'');a.kind=String(s&&s.kind||'skin');a.wearName=s&&s.wearName?String(s.wearName):null;a.image=s&&s.image?String(s.image):'';a.priceSource=String(s&&s.priceSource||'');a.sourcePrice=Number(s&&s.sourcePrice||0);a.sourceCurrency=String(s&&s.sourceCurrency||'');
-    out.push(a);
+    if(a.priceSource.toLowerCase()==='lis-skins'){lisCatalogPriceLocked[k]=true;lisCatalogSource='lis-skins';}out.push(a);
   });return out;
 }
 async function syncServerCatalogs(){
-  var cached=nxReadPublicCache('skins-v60',5*60*1000);
+  var cached=nxReadPublicCache('skins-v59',5*60*1000);
   if(cached&&Array.isArray(cached)&&cached.length){skinsList=normalizeServerSkinList(cached);return true;}
   var controller=typeof AbortController!=='undefined'?new AbortController():null;
   var timer=controller?setTimeout(function(){try{controller.abort();}catch(e){}},8000):null;
   try{
     var r=await fetch(apiUrl('/api/skins'),{method:'GET',cache:'no-store',signal:controller?controller.signal:undefined}),d=await r.json().catch(function(){return{};});
-    if(d.ok&&Array.isArray(d.skins)&&d.skins.length){skinsList=normalizeServerSkinList(d.skins);try{localStorage.removeItem('nexusdrop_steam_prices_v4');}catch(e){}marketPriceOverrides=Object.create(null);marketPriceMeta=Object.create(null);nxWritePublicCache('skins-v60',d.skins);return true;}
+    if(d.ok&&Array.isArray(d.skins)&&d.skins.length){skinsList=normalizeServerSkinList(d.skins);try{localStorage.removeItem('nexusdrop_steam_prices_v3');}catch(e){}marketPriceOverrides=Object.create(null);marketPriceMeta=Object.create(null);nxWritePublicCache('skins-v59',d.skins);return true;}
     return false;
   }catch(e){console.warn('server skins sync failed',e);return false;}
   finally{if(timer)clearTimeout(timer);}
 }
 
 async function loadPublicBootstrap(){
-  var cached = nxReadPublicCache('public-bootstrap-v60', 30 * 1000);
+  var cached = nxReadPublicCache('public-bootstrap-v59', 30 * 1000);
   if (cached && cached.ok) {
     if (Array.isArray(cached.skins) && cached.skins.length) {
       skinsList=normalizeServerSkinList(cached.skins);
     }
-    window._apiProtocolOk=Number(cached.protocolVersion||0)>=NX_REQUIRED_PROTOCOL_VERSION&&Number(cached.version||0)>=NX_REQUIRED_WORKER_VERSION;
+    window._apiProtocolOk=Number(cached.protocolVersion||0)>=2&&Number(cached.version||0)>=20;
     siteConfig.brand=String(cached.brand||'NEXUSDROP');
     siteConfig.newsUrl=String(cached.newsUrl||siteConfig.newsUrl);
     siteConfig.supportUrl=String(cached.supportUrl||siteConfig.supportUrl);
@@ -4507,14 +4134,14 @@ async function loadPublicBootstrap(){
     var r=await fetch(apiUrl('/api/public/bootstrap'),{method:'GET'});
     var d=await r.json().catch(function(){return{};});
     if(!(r.ok&&d.ok)) return false;
-    nxWritePublicCache('public-bootstrap-v60',d);
+    nxWritePublicCache('public-bootstrap-v59',d);
     if(Array.isArray(d.skins)&&d.skins.length){
       skinsList=normalizeServerSkinList(d.skins);
       nxWritePublicCache('skins',skinsList);
     }
     nxWritePublicCache('api-version',{ok:true,version:d.version,protocolVersion:d.protocolVersion});
     nxWritePublicCache('site-config',d);
-    window._apiProtocolOk=Number(d.protocolVersion||0)>=NX_REQUIRED_PROTOCOL_VERSION&&Number(d.version||0)>=NX_REQUIRED_WORKER_VERSION;
+    window._apiProtocolOk=Number(d.protocolVersion||0)>=2&&Number(d.version||0)>=20;
     siteConfig.brand=String(d.brand||'NEXUSDROP');
     siteConfig.newsUrl=String(d.newsUrl||siteConfig.newsUrl);
     siteConfig.supportUrl=String(d.supportUrl||siteConfig.supportUrl);
@@ -4528,11 +4155,11 @@ async function loadPublicBootstrap(){
 
 async function verifyApiProtocol(){
   var cached = nxReadPublicCache('api-version', 10 * 60 * 1000);
-  if (cached) { window._apiProtocolOk=!!(cached.ok&&Number(cached.protocolVersion||0)>=NX_REQUIRED_PROTOCOL_VERSION&&Number(cached.version||0)>=NX_REQUIRED_WORKER_VERSION); return window._apiProtocolOk; }
+  if (cached) { window._apiProtocolOk=!!(cached.ok&&Number(cached.protocolVersion||0)>=2&&Number(cached.version||0)>=20); return window._apiProtocolOk; }
   try{
     var r=await fetch(apiUrl('/api/version'),{method:'GET'}),d=await r.json().catch(function(){return{};});
     nxWritePublicCache('api-version',d);
-    window._apiProtocolOk=!!(r.ok&&d.ok&&Number(d.protocolVersion||0)>=NX_REQUIRED_PROTOCOL_VERSION&&Number(d.version||0)>=NX_REQUIRED_WORKER_VERSION);
+    window._apiProtocolOk=!!(r.ok&&d.ok&&Number(d.protocolVersion||0)>=2&&Number(d.version||0)>=20);
     if(!window._apiProtocolOk) console.warn('NEXUS DROP API protocol mismatch',d);
     return window._apiProtocolOk;
   }catch(e){window._apiProtocolOk=false;console.warn('NEXUS DROP API version check failed',e);return false;}
