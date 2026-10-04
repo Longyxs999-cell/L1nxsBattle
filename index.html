@@ -2133,8 +2133,8 @@ function toggleShopCartItem(i){i=Number(i);var item=skinsList[i];if(!item)return
 function changeShopCartQty(key,delta){var x=_shopCart[String(key)];if(!x)return false;x.qty=Math.max(1,Math.min(20,Number(x.qty||1)+Number(delta||0)));renderShopCart();return false;}
 function removeShopCartItem(key){delete _shopCart[String(key)];renderShopCart();updateShopGrid();return false;}
 function clearShopCart(){_shopCart=Object.create(null);renderShopCart();updateShopGrid();return false;}
-function renderShopCart(){var box=document.getElementById('shopCart');if(!box)return;var count=shopCartCount(),total=shopCartTotal();if(!count){box.innerHTML='<div class="nx-shop-cart-info"><b>Корзина пуста</b><span>Добавьте несколько предметов и оформите покупку одной операцией.</span></div>';return;}var rows=Object.keys(_shopCart).map(function(k){var x=_shopCart[k];return '<div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)"><div style="width:42px;height:36px;flex:0 0 42px">'+artImg(x.name)+'</div><div style="min-width:0;flex:1"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px">'+safeSkinLabel(x.name)+'</b><span style="font-size:9px;color:#ffd400">'+money(x.price)+' ₽</span></div><button class="nx-cart-btn" onclick="return changeShopCartQty(\''+k+'\',-1)">−</button><b style="font-size:10px">'+x.qty+'</b><button class="nx-cart-btn" onclick="return changeShopCartQty(\''+k+'\',1)">+</button><button class="nx-cart-btn" onclick="return removeShopCartItem(\''+k+'\')">×</button></div>';}).join('');box.innerHTML='<details open><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px"><div class="nx-shop-cart-info"><b>🛒 Корзина · '+count+'</b><span>'+money(total)+' ₽ · '+Object.keys(_shopCart).length+' позиции</span></div><div class="nx-shop-cart-actions"><button type="button" class="nx-cart-btn" onclick="event.preventDefault();return clearShopCart()">Очистить</button><button type="button" class="nx-cart-btn primary" onclick="event.preventDefault();return buyShopCart()">КУПИТЬ ВСЁ</button></div></summary><div style="margin-top:7px">'+rows+'</div></details>';}
-async function buyShopCart(){if(_shopCartBusy)return false;if(!currentUser)return showInfo('Вход','Сначала войдите в аккаунт.');var entries=Object.values(_shopCart).filter(function(x){return x&&Number(x.qty)>0;});if(!entries.length)return false;var names=[];entries.forEach(function(x){for(var i=0;i<Math.min(50,Math.max(0,Number(x.qty)||0));i++)names.push(String(x.name||''));});if(!names.length)return false;var shownTotal=entries.reduce(function(s,x){return s+Number(x.price||0)*Number(x.qty||0);},0);showSellConfirm('Покупка из корзины','Предметов: <b>'+names.length+'</b><br><span style="color:#ffd166">Итого по каталогу: '+money(shownTotal)+' ₽</span>',async function(){_shopCartBusy=true;try{var requestId='cart_batch_'+Date.now()+'_'+Math.floor(secureRandom01()*1e12);var r=await fetch(apiUrl('/api/shop/buy-batch'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken,skinNames:names,requestId:requestId}),cache:'no-store'});var d=await readJsonResponse(r);if(!r.ok||!d.ok){showInfo('Корзина',d.error||('HTTP '+r.status+' · покупка не выполнена.'));return;}if(d.user)applyUser(d.user);clearShopCart();var total=Number(d.total||shownTotal),purchased=Number(d.purchased||names.length);showInfo('Готово','Куплено предметов: '+purchased+'<br>Списано: '+money(total)+' ₽');}catch(e){showInfo('Корзина','Сервер недоступен.');}finally{_shopCartBusy=false;renderShopCart();updateShopGrid();}});return false;}
+function renderShopCart(){var box=document.getElementById('shopCart');if(!box)return;var count=shopCartCount(),total=shopCartTotal();if(!count){box.innerHTML='<div class="nx-shop-cart-info"><b>Корзина пуста</b><span>Добавьте несколько предметов и оформите покупку одной операцией.</span></div>';return;}var rows=Object.keys(_shopCart).map(function(k){var x=_shopCart[k];return '<div style="display:flex;align-items:center;gap:7px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)"><div style="width:42px;height:36px;flex:0 0 42px">'+artImg(x.name)+'</div><div style="min-width:0;flex:1"><b style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px">'+safeSkinLabel(x.name)+'</b><span style="font-size:9px;color:#ffd400">'+money(x.price)+'</span></div><button class="nx-cart-btn" onclick="return changeShopCartQty(\''+k+'\',-1)">−</button><b style="font-size:10px">'+x.qty+'</b><button class="nx-cart-btn" onclick="return changeShopCartQty(\''+k+'\',1)">+</button><button class="nx-cart-btn" onclick="return removeShopCartItem(\''+k+'\')">×</button></div>';}).join('');box.innerHTML='<details open><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px"><div class="nx-shop-cart-info"><b>🛒 Корзина · '+count+'</b><span>'+money(total)+' · '+Object.keys(_shopCart).length+' позиции</span></div><div class="nx-shop-cart-actions"><button type="button" class="nx-cart-btn" onclick="event.preventDefault();return clearShopCart()">Очистить</button><button type="button" class="nx-cart-btn primary" onclick="event.preventDefault();return buyShopCart()">КУПИТЬ ВСЁ</button></div></summary><div style="margin-top:7px">'+rows+'</div></details>';}
+async function buyShopCart(){if(_shopCartBusy)return false;if(!currentUser)return showInfo('Вход','Сначала войдите в аккаунт.');var entries=Object.values(_shopCart).filter(function(x){return x&&Number(x.qty)>0;});if(!entries.length)return false;var names=[];entries.forEach(function(x){for(var i=0;i<Math.min(50,Math.max(0,Number(x.qty)||0));i++)names.push(String(x.name||''));});if(!names.length)return false;var shownTotal=entries.reduce(function(s,x){return s+Number(x.price||0)*Number(x.qty||0);},0);showSellConfirm('Покупка из корзины','Предметов: <b>'+names.length+'</b><br><span style="color:#ffd166">Итого по каталогу: '+money(shownTotal)+'</span>',async function(){_shopCartBusy=true;try{var requestId='cart_batch_'+Date.now()+'_'+Math.floor(secureRandom01()*1e12);var r=await fetch(apiUrl('/api/shop/buy-batch'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken,skinNames:names,requestId:requestId}),cache:'no-store'});var d=await readJsonResponse(r);if(!r.ok||!d.ok){showInfo('Корзина',d.error||('HTTP '+r.status+' · покупка не выполнена.'));return;}if(d.user)applyUser(d.user);clearShopCart();var total=Number(d.total||shownTotal),purchased=Number(d.purchased||names.length);showInfo('Готово','Куплено предметов: '+purchased+'<br>Списано: '+money(total));}catch(e){showInfo('Корзина','Сервер недоступен.');}finally{_shopCartBusy=false;renderShopCart();updateShopGrid();}});return false;}
 
 function shopFilteredItems() {
   var q=shopSearch.toLowerCase().trim();
@@ -2226,7 +2226,7 @@ function showSellConfirm(title, text, onYes) {
 function withdrawalStatusLabel(status){var m={awaiting_stock:'ОЖИДАЕТ ПРЕДМЕТ',asset_reserved:'ПРЕДМЕТ ЗАРЕЗЕРВИРОВАН',trade_sent:'ТРЕЙД ОТПРАВЛЕН',trade_hold:'ОЖИДАЕТ ПЕРЕДАЧИ',completed:'ВЫДАНО',cancelled:'ОТМЕНЕНО'};return m[String(status||'')]||'ОБРАБОТКА';}
 async function loadWithdrawals(){
   var box=document.getElementById('nxWithdrawalsList');if(!box||!authToken)return;box.innerHTML='<div class="muted">Загружаем заявки…</div>';
-  try{var r=await fetch(apiUrl('/api/withdrawals/list'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken}),cache:'no-store'}),d=await r.json().catch(function(){return{};});if(!r.ok||!d.ok){box.innerHTML='<div class="muted">'+escapeHtml(d.error||'Не удалось загрузить заявки.')+'</div>';return;}var rows=Array.isArray(d.withdrawals)?d.withdrawals:[];box.innerHTML=rows.length?rows.map(function(w){return '<div class="panel" style="margin-top:9px;padding:12px"><div style="display:flex;justify-content:space-between;gap:10px"><b style="overflow-wrap:anywhere">'+safeSkinLabel(w.marketHashName)+'</b><b style="white-space:nowrap;color:#ffd84d">'+(w.referencePriceRub?money(w.referencePriceRub)+' ₽':'')+'</b></div><div class="muted" style="margin-top:5px">'+escapeHtml(withdrawalStatusLabel(w.status))+(w.purchasePriceRub!=null?' · закупка '+money(w.purchasePriceRub)+' ₽':'')+'</div>'+(w.tradeOfferId?'<div class="muted" style="margin-top:4px">Trade Offer: '+escapeHtml(w.tradeOfferId)+'</div>':'')+(w.lastError?'<div class="muted" style="margin-top:5px;color:#ff9a8b">'+escapeHtml(w.lastError)+'</div>':'')+'</div>';}).join(''):'<div class="muted">Заявок на вывод пока нет.</div>';}catch(e){box.innerHTML='<div class="muted">Сервер недоступен.</div>';}
+  try{var r=await fetch(apiUrl('/api/withdrawals/list'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken}),cache:'no-store'}),d=await r.json().catch(function(){return{};});if(!r.ok||!d.ok){box.innerHTML='<div class="muted">'+escapeHtml(d.error||'Не удалось загрузить заявки.')+'</div>';return;}var rows=Array.isArray(d.withdrawals)?d.withdrawals:[];box.innerHTML=rows.length?rows.map(function(w){return '<div class="panel" style="margin-top:9px;padding:12px"><div style="display:flex;justify-content:space-between;gap:10px"><b style="overflow-wrap:anywhere">'+safeSkinLabel(w.marketHashName)+'</b><b style="white-space:nowrap;color:#ffd84d">'+(w.referencePriceRub?money(w.referencePriceRub):'')+'</b></div><div class="muted" style="margin-top:5px">'+escapeHtml(withdrawalStatusLabel(w.status))+(w.purchasePriceRub!=null?' · закупка '+money(w.purchasePriceRub):'')+'</div>'+(w.tradeOfferId?'<div class="muted" style="margin-top:4px">Trade Offer: '+escapeHtml(w.tradeOfferId)+'</div>':'')+(w.lastError?'<div class="muted" style="margin-top:5px;color:#ff9a8b">'+escapeHtml(w.lastError)+'</div>':'')+'</div>';}).join(''):'<div class="muted">Заявок на вывод пока нет.</div>';}catch(e){box.innerHTML='<div class="muted">Сервер недоступен.</div>';}
 }
 function saveSteamTradeUrl(){
   var inp=document.getElementById('steamTradeUrlInput'),msg=document.getElementById('steamTradeUrlMsg');if(!inp||!currentUser||!authToken)return;var url=inp.value.trim();if(msg)msg.textContent='Проверяем Trade URL…';
@@ -2234,7 +2234,7 @@ function saveSteamTradeUrl(){
 }
 function withdrawSkin(i){
   var item=state.inventory[Number(i)];if(!item||!item.id)return false;if(!currentUser||!currentUser.steamLinked)return showInfo('Steam','Сначала привяжите Steam.');if(!currentUser.steamTradeUrlSet)return showInfo('Вывод','Сначала добавьте Trade URL в профиле.');
-  showSellConfirm('Вывод в Steam','Вывести <b>'+safeSkinLabel(item[0])+'</b> · '+money(item[2])+' ₽?<div class="muted" style="margin-top:7px">Предмет будет временно изъят из Nexus-инвентаря до завершения вывода.</div>',async function(){try{var r=await fetch(apiUrl('/api/withdrawals/create'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken,itemId:String(item.id)}),cache:'no-store'}),d=await r.json().catch(function(){return{}});if(!r.ok||!d.ok){showInfo('Вывод',d.error||'Не удалось создать заявку.');return;}closeModal('genericModal');if(d.user)applyUser(d.user);go('withdraw');}catch(e){showInfo('Вывод','Сервер недоступен.');}});return false;
+  showSellConfirm('Вывод в Steam','Вывести <b>'+safeSkinLabel(item[0])+'</b> · '+money(item[2])+'?<div class="muted" style="margin-top:7px">Предмет будет временно изъят из Nexus-инвентаря до завершения вывода.</div>',async function(){try{var r=await fetch(apiUrl('/api/withdrawals/create'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken,itemId:String(item.id)}),cache:'no-store'}),d=await r.json().catch(function(){return{}});if(!r.ok||!d.ok){showInfo('Вывод',d.error||'Не удалось создать заявку.');return;}closeModal('genericModal');if(d.user)applyUser(d.user);go('withdraw');}catch(e){showInfo('Вывод','Сервер недоступен.');}});return false;
 }
 function openWithdrawBetaNotice(){return go('withdraw');}
 var nxWithdrawPollTimer=0;
@@ -2451,7 +2451,7 @@ function renderUpgradeSourceList(){
   box.innerHTML=arr.map(function(x){
     var i=state.inventory.indexOf(x),id=String(x.id||''),selected=_upgradeSelectedIds.indexOf(id)>=0;
     var no=_upgradeSelectedIds.indexOf(id)+1;
-    return '<button type="button" class="up12-card '+(selected?'sel':'')+'" onclick="return toggleUpgradeSource('+i+')" aria-label="'+escapeHtml(x[0])+'"><span class="up12-badge">'+(selected?no:'＋')+'</span><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(x[2])+' ₽</div></button>';
+    return '<button type="button" class="up12-card '+(selected?'sel':'')+'" onclick="return toggleUpgradeSource('+i+')" aria-label="'+escapeHtml(x[0])+'"><span class="up12-badge">'+(selected?no:'＋')+'</span><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(x[2])+'</div></button>';
   }).join('');
 }
 function refreshUpgradeSourceList(){renderUpgradeSourceList();updateUpgradePreview();return false;}
@@ -2472,12 +2472,12 @@ function renderUpgradeTargetCatalog(){
     return d?(st.sort==='desc'?-d:d):String(a[0]).localeCompare(String(b[0]));
   });
   _upgradeTargetFiltered=list;
-  if(count)count.textContent=(total?('Ставка '+money(total)+' ₽ · '):'')+list.length+' найдено';
+  if(count)count.textContent=(total?('Ставка '+money(total)+' · '):'')+list.length+' найдено';
   if(!list.length){box.innerHTML='<div class="up12-empty" style="grid-column:1/-1">По заданным фильтрам ничего не найдено.</div>';return;}
   var visible=list.slice(0,_upgradeTargetLimit);
   box.innerHTML=visible.map(function(x,idx){
     var eligible=up9TargetEligible(x),active=eligible&&upgradeTargetName===x[0];
-    return '<button type="button" class="up12-card '+(active?'sel ':'')+(eligible?'':'disabled')+'" '+(eligible?'':'disabled')+' onclick="return selectUpgradeTargetByIndex('+idx+')" aria-label="'+escapeHtml(x[0])+'"><span class="up12-badge">'+(active?'✓':(eligible?'':'—'))+'</span><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+' ₽</div></button>';
+    return '<button type="button" class="up12-card '+(active?'sel ':'')+(eligible?'':'disabled')+'" '+(eligible?'':'disabled')+' onclick="return selectUpgradeTargetByIndex('+idx+')" aria-label="'+escapeHtml(x[0])+'"><span class="up12-badge">'+(active?'✓':(eligible?'':'—'))+'</span><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+'</div></button>';
   }).join('');
   if(list.length>_upgradeTargetLimit)box.innerHTML+='<button type="button" class="up12-more" onclick="return upgradeTargetLoadMore()">Показать ещё · '+(list.length-_upgradeTargetLimit)+'</button>';
 }
@@ -2594,12 +2594,12 @@ function updateUpgradePreview(){
     if(srcs.length){var first=srcs[0].item;srcBox.innerHTML='<div class="up12-preview-art">'+artImg(first[0])+'</div><div class="up12-preview-name">'+safeSkinLabel(first[0])+'</div>'+(srcs.length>1?'<div class="up12-preview-more">+'+(srcs.length-1)+' предмет(а)</div>':'');}
     else srcBox.innerHTML='<div class="up12-placeholder-icon up12-source-glyph"></div><div class="up12-preview-name">Выберите предмет для ставки</div>';
   }
-  if(srcMeta)srcMeta.innerHTML=srcs.length?'<b>'+srcs.length+'</b> предмет(а) · <b>'+money(total)+' ₽</b>':'Из инвентаря';
+  if(srcMeta)srcMeta.innerHTML=srcs.length?'<b>'+srcs.length+'</b> предмет(а) · <b>'+money(total)+'</b>':'Из инвентаря';
   if(tBox){
     if(target)tBox.innerHTML='<div class="up12-preview-art">'+artImg(target[0])+'</div><div class="up12-preview-name">'+safeSkinLabel(target[0])+'</div>';
     else tBox.innerHTML='<div class="up12-placeholder-icon up12-target-glyph"></div><div class="up12-preview-name">Выберите цель для апгрейда</div>';
   }
-  if(tMeta)tMeta.innerHTML=target?'<b>'+money(getCatalogPrice(target[0],target[1]))+' ₽</b>'+marketSourceBadge(target[0]):'Из каталога';
+  if(tMeta)tMeta.innerHTML=target?'<b>'+money(getCatalogPrice(target[0],target[1]))+'</b>'+marketSourceBadge(target[0]):'Из каталога';
   var mult=0,baseChance=0;if(total&&target){var targetCatalogPrice=getCatalogPrice(target[0],target[1]);mult=targetCatalogPrice/total;baseChance=Math.min(80,100/mult);}
   var bonus=1;
   var effective=Math.min(100,baseChance*bonus);
@@ -2621,7 +2621,7 @@ function updateUpgradePreview(){
   var mr=document.getElementById('up12MultRow');if(mr){mr.querySelectorAll('.up12-mult').forEach(function(b,i){b.classList.toggle('active',!!_upgradeQuickSelection&&_upgradeQuickSelection.type==='mult'&&_upgradeQuickSelection.index===i);});mr.querySelectorAll('.up12-chance-btn').forEach(function(b,i){b.classList.toggle('active',!!_upgradeQuickSelection&&_upgradeQuickSelection.type==='pct'&&_upgradeQuickSelection.index===i);});}
   var count=document.getElementById('up12BasketCount');if(count)count.textContent=srcs.length+'/6';
   var sourcePane=document.getElementById('up12SourceCount');if(sourcePane)sourcePane.textContent=srcs.length+'/6';
-  var bottom=document.getElementById('up12SourceMetaBottom');if(bottom)bottom.textContent=money(total)+' ₽';
+  var bottom=document.getElementById('up12SourceMetaBottom');if(bottom)bottom.textContent=money(total);
 }
 function setUpgradeSourceTab(tab){
   _up12SourceTab=tab==='shop'?'shop':'inventory';
@@ -2634,7 +2634,7 @@ function setUpgradeSourceTab(tab){
   var arr=(skinsList||[]).filter(function(x){var p=getCatalogPrice(x[0],x[1]),n=String(x[0]||'').toLowerCase();return(!q||n.indexOf(q)!==-1)&&p>=min&&p<=max;}).slice();
   arr.sort(function(a,c){var d=Number(a[1])-Number(c[1]);return d?(sort==='desc'?-d:d):String(a[0]).localeCompare(String(c[0]));});
   if(!arr.length){list.innerHTML='<div class="up12-empty" style="grid-column:1/-1">В магазине ничего не найдено.</div>';return false;}
-  list.innerHTML=arr.slice(0,80).map(function(x){var idx=skinsList.indexOf(x);return '<div class="up12-card shop-card"><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+' ₽</div><button type="button" class="up12-buy" onclick="return buySkin('+idx+')">КУПИТЬ</button></div>';}).join('');
+  list.innerHTML=arr.slice(0,80).map(function(x){var idx=skinsList.indexOf(x);return '<div class="up12-card shop-card"><div class="up12-art">'+artImg(x[0])+'</div><div class="up12-card-name">'+safeSkinLabel(x[0])+'</div><div class="up12-card-price">'+money(getCatalogPrice(x[0],x[1]))+marketSourceBadge(x[0])+'</div><button type="button" class="up12-buy" onclick="return buySkin('+idx+')">КУПИТЬ</button></div>';}).join('');
   return false;
 }
 function focusUpgradePane(which){
@@ -2701,12 +2701,12 @@ function renderRecordingShop(){
   if(!visible.length){
     html+='<div class="panel" style="margin-top:10px;text-align:center;"><div class="muted">Каталог демо-магазина пока не загрузился.</div><button type="button" class="login-pill" style="margin-top:10px" onclick="window._recordingCatalogSyncPromise=null;ensureRecordingCatalog();return renderRecordingShop()">↻ Повторить загрузку</button></div>';
   }else{
-    html+='<div class="nx-rec-grid">'+visible.map(function(x,i){return '<article class="nx-rec-card"><div class="nx-rec-art">'+artImg(x[0])+'</div><b>'+safeSkinLabel(x[0])+'</b><span>'+money(x[1])+' ₽</span><button type="button" onclick="return addRecordingSkin('+i+')">ДОБАВИТЬ</button></article>';}).join('')+'</div>'+(list.length>recordingCatalogLimit?'<button type="button" class="login-pill" style="width:100%;margin-top:10px" onclick="recordingCatalogLimit=Math.min(recordingCatalogLimit+80,recordingCatalogFiltered.length);return renderRecordingShop()">Показать ещё · '+(list.length-recordingCatalogLimit)+'</button>':'');
+    html+='<div class="nx-rec-grid">'+visible.map(function(x,i){return '<article class="nx-rec-card"><div class="nx-rec-art">'+artImg(x[0])+'</div><b>'+safeSkinLabel(x[0])+'</b><span>'+money(x[1])+'</span><button type="button" onclick="return addRecordingSkin('+i+')">ДОБАВИТЬ</button></article>';}).join('')+'</div>'+(list.length>recordingCatalogLimit?'<button type="button" class="login-pill" style="width:100%;margin-top:10px" onclick="recordingCatalogLimit=Math.min(recordingCatalogLimit+80,recordingCatalogFiltered.length);return renderRecordingShop()">Показать ещё · '+(list.length-recordingCatalogLimit)+'</button>':'');
   }
   return html+'</div>';
 }
 async function addRecordingSkin(i){var x=recordingCatalogFiltered[Number(i)];if(!x)return false;try{var r=await fetch(apiUrl('/api/recording/add'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken||'',adminToken:adminToken||'',item:{name:x[0]}}),cache:'no-store'});var d=await r.json().catch(function(){return{}});if(!r.ok||!d.ok)return showInfo('Демо-инвентарь',d.error||'Не удалось добавить предмет.');applyRecordingState(d.recording);recordingTab='inventory';renderRecordingMode(document.getElementById('appMain'));}catch(e){showInfo('Демо-инвентарь','Сервер недоступен.');}return false;}
-function renderRecordingInventory(){var inv=Array.isArray(recordingState.inventory)?recordingState.inventory:[];var html='<div class="nx-rec-panel"><div class="nx-rec-inv-head"><b>ДЕМО-ИНВЕНТАРЬ</b><span>'+inv.length+' предмет'+(inv.length===1?'':'ов')+'</span></div><div class="nx-rec-grid">';html+=inv.map(function(x){return '<article class="nx-rec-card"><div class="nx-rec-art">'+artImg(x.name)+'</div><b>'+safeSkinLabel(x.name)+'</b><span>'+money(x.price)+' ₽</span></article>';}).join('');html+='</div><button type="button" class="login-pill" style="width:100%;margin-top:10px" onclick="return resetRecordingInventory()">ОЧИСТИТЬ ДЕМО-ИНВЕНТАРЬ</button></div>';return html;}
+function renderRecordingInventory(){var inv=Array.isArray(recordingState.inventory)?recordingState.inventory:[];var html='<div class="nx-rec-panel"><div class="nx-rec-inv-head"><b>ДЕМО-ИНВЕНТАРЬ</b><span>'+inv.length+' предмет'+(inv.length===1?'':'ов')+'</span></div><div class="nx-rec-grid">';html+=inv.map(function(x){return '<article class="nx-rec-card"><div class="nx-rec-art">'+artImg(x.name)+'</div><b>'+safeSkinLabel(x.name)+'</b><span>'+money(x.price)+'</span></article>';}).join('');html+='</div><button type="button" class="login-pill" style="width:100%;margin-top:10px" onclick="return resetRecordingInventory()">ОЧИСТИТЬ ДЕМО-ИНВЕНТАРЬ</button></div>';return html;}
 async function resetRecordingInventory(){try{var r=await fetch(apiUrl('/api/recording/reset'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken||'',adminToken:adminToken||''}),cache:'no-store'});var d=await r.json().catch(function(){return{}});if(!r.ok||!d.ok)return showInfo('Демо-инвентарь',d.error||'Не удалось очистить.');applyRecordingState(d.recording);renderRecordingMode(document.getElementById('appMain'));}catch(e){showInfo('Демо-инвентарь','Сервер недоступен.');}return false;}
 function renderRecordingMode(m){
   if(!(currentUser&&(currentUser.recordingAccess||isAdminUI))){m.innerHTML='<div class="section-title">Режим съёмки</div><div class="panel"><div class="muted">Доступ к режиму съёмки ещё не выдан.</div></div>';return;}
@@ -3056,7 +3056,7 @@ async function doUpgrade(){
     nxStopUpgradeSpinSound();nxPrimeUpgradeAudio();nxPlayUpgradeResultSound(success);if(success)nxShowUpgradeWinFx();
     if(pointer){nxSetUpgradePointerAngle(finalDeg,true);pointer.classList.add(success?'result-win':'result-lose');}
     if(wheel)wheel.classList.add(success?'result-win':'result-lose');
-    if(status){status.className='nx-upgrade-inline-status show '+(success?'win':'lose');status.innerHTML='<b>'+(success?'УСПЕХ':'НЕУДАЧА')+'</b>'+(success?'Выдан <strong>'+safeSkinLabel(serverTarget.name)+'</strong> · '+money(serverTarget.price)+' ₽':'Исходные предметы списаны. Новый предмет не выдан.');}
+    if(status){status.className='nx-upgrade-inline-status show '+(success?'win':'lose');status.innerHTML='<b>'+(success?'УСПЕХ':'НЕУДАЧА')+'</b>'+(success?'Выдан <strong>'+safeSkinLabel(serverTarget.name)+'</strong> · '+money(serverTarget.price):'Исходные предметы списаны. Новый предмет не выдан.');}
     try{if(navigator.vibrate)navigator.vibrate(success?[45,30,80]:[35,25,55]);}catch(e){}
     setTimeout(function(){
       if(_activeUpgrade!==requestId)return;
@@ -3297,7 +3297,7 @@ async function buySkin(i){
   var name=String(item[0]||''),clientPrice=getCatalogPrice(name,item[1]);
   if(!name||!Number.isFinite(clientPrice)||clientPrice<=0)return showInfo('Ошибка','Некорректные данные скина.');
   var requestId='buy_'+Date.now()+'_'+Math.floor(secureRandom01()*1e12);
-  showSellConfirm('Покупка','Купить <b>'+safeSkinLabel(name)+'</b><br><span style="color:#ffd166">'+money(clientPrice)+' ₽</span>?',async function(){
+  showSellConfirm('Покупка','Купить <b>'+safeSkinLabel(name)+'</b><br><span style="color:#ffd166">'+money(clientPrice)+'</span>?',async function(){
     if(_shopOperationLock)return;
     _shopOperationLock=true;
     var dlg=document.getElementById('genericDialog');
@@ -3336,7 +3336,7 @@ async function buySkin(i){
       applyUser(d.user);
       var box=document.getElementById('up4BuyBox'),st=document.getElementById('up4BuyStatus');
       if(st)st.innerHTML='✓ ПОКУПКА ВЫПОЛНЕНА';
-      if(box){box.classList.remove('loading');box.classList.add('purchase-reveal');box.innerHTML='<div class="up4-buy-art">'+artImg(d.item.name||name)+'</div><div class="up4-buy-status" style="color:#73ee94">✓ ПОКУПКА ВЫПОЛНЕНА</div><div class="up4-buy-price">Списано '+money(Number(d.consumedBalance||clientPrice))+' ₽</div><div class="up4-buy-success">Скин добавлен в инвентарь</div>';}
+      if(box){box.classList.remove('loading');box.classList.add('purchase-reveal');box.innerHTML='<div class="up4-buy-art">'+artImg(d.item.name||name)+'</div><div class="up4-buy-status" style="color:#73ee94">✓ ПОКУПКА ВЫПОЛНЕНА</div><div class="up4-buy-price">Списано '+money(Number(d.consumedBalance||clientPrice))+'</div><div class="up4-buy-success">Скин добавлен в инвентарь</div>';}
       renderUpgradeSourceList&&renderUpgradeSourceList();
       setTimeout(function(){closeModal('genericModal');if(currentPage==='upgrade')go('upgrade');},800);
     }catch(e){
@@ -3356,12 +3356,12 @@ async function sellSkin(i){
   if(!authToken)return showInfo('Вход','Сначала войдите.');
   var item=state.inventory[Number(i)];if(!item)return showInfo('Ошибка','Предмет не найден.');
   var value=Math.floor(Number(item[2]||0)*0.9);
-  showSellConfirm('Продажа скина','Вы хотите продать скин <b>«'+safeSkinLabel(item[0])+'»</b>?<br><span style="color:#ffd166">Начисление: '+money(value)+' ₽</span>.',async function(){
+  showSellConfirm('Продажа скина','Вы хотите продать скин <b>«'+safeSkinLabel(item[0])+'»</b>?<br><span style="color:#ffd166">Начисление: '+money(value)+'</span>.',async function(){
     _sellOperationLock=true;
     try{
       var requestId='sell_'+Date.now()+'_'+Math.floor(secureRandom01()*1e12);
       var sold=await invSell(Number(i),requestId);
-      if(sold>0){showInfo('Продано','Скин удалён из инвентаря, деньги сразу начислены на баланс: '+money(sold)+' ₽.');await renderInventory(document.getElementById('appMain'));}
+      if(sold>0){showInfo('Продано','Скин удалён из инвентаря, деньги сразу начислены на баланс: '+money(sold)+'.');await renderInventory(document.getElementById('appMain'));}
       else showInfo('Ошибка продажи','Операция не завершена. Средства локально не списаны.');
     }finally{_sellOperationLock=false;}
   });
@@ -3371,12 +3371,12 @@ async function sellAllSkins(){
   if(!authToken)return showInfo('Вход','Сначала войдите.');
   if(!state.inventory.length)return showInfo('Инвентарь','Инвентарь уже пуст.');
   var count=state.inventory.length,value=state.inventory.reduce(function(sum,x){return sum+Math.floor(Number(x[2]||0)*0.9);},0);
-  showSellConfirm('Продажа всех предметов','Вы хотите продать <b>все предметы с вашего инвентаря</b>?<br><span style="color:#ffd166">'+count+' шт. · '+money(value)+' ₽</span>.',async function(){
+  showSellConfirm('Продажа всех предметов','Вы хотите продать <b>все предметы с вашего инвентаря</b>?<br><span style="color:#ffd166">'+count+' шт. · '+money(value)+'</span>.',async function(){
     _sellOperationLock=true;
     try{
       var requestId='sellall_'+Date.now()+'_'+Math.floor(secureRandom01()*1e12);
       var sold=await invSellAll(requestId);
-      if(sold>0){showInfo('Продано всё','Все предметы удалены из инвентаря, деньги сразу начислены: '+money(sold)+' ₽.');await renderInventory(document.getElementById('appMain'));}
+      if(sold>0){showInfo('Продано всё','Все предметы удалены из инвентаря, деньги сразу начислены: '+money(sold)+'.');await renderInventory(document.getElementById('appMain'));}
       else showInfo('Ошибка продажи','Не удалось завершить продажу всех предметов.');
     }finally{_sellOperationLock=false;}
   });
@@ -3576,12 +3576,12 @@ async function loadUpgradeHistory(){
       var imgName=win&&received?String(received.name||target.name||''):String(target.name||'');
       var price=win?Number(x.receivedPrice||target.price||0):Number(x.sourcePrice||0);
       var label=win?'УСПЕХ':'НЕУДАЧА';
-      var sub=win?('Получен: '+safeSkinLabel(target.name||'Скин')):('Ставка: '+money(Number(x.sourcePrice||0))+' ₽');
+      var sub=win?('Получен: '+safeSkinLabel(target.name||'Скин')):('Ставка: '+money(Number(x.sourcePrice||0)));
       return '<div class="upgrade-history-item">'+
         '<div class="upgrade-history-img">'+(imgName?artImg(imgName):'')+'</div>'+
         '<div><div class="upgrade-history-name">'+(win?'✨ ':'✕ ')+safeSkinLabel(target.name||'Апгрейд')+'</div>'+
         '<div class="upgrade-history-meta">'+sub+' · ×'+Number(x.multiplier||0).toFixed(2)+' · '+src.length+' предмет'+(src.length===1?'':'а')+'<br>'+date+'</div></div>'+
-        '<div class="upgrade-history-price '+(win?'upgrade-history-win':'upgrade-history-lose')+'">'+label+'<br>'+money(price)+' ₽</div>'+
+        '<div class="upgrade-history-price '+(win?'upgrade-history-win':'upgrade-history-lose')+'">'+label+'<br>'+money(price)+'</div>'+
       '</div>';
     }).join('');
   }catch(e){box.innerHTML='<div class="upgrade-history-empty">Ошибка загрузки истории.</div>';}
@@ -4234,8 +4234,8 @@ async function renderAdminFinance(box){
   try{
     var r=await fetch(apiUrl('/api/admin/finance'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({adminToken:adminToken}),cache:'no-store'}),d=await r.json();
     if(!r.ok||!d.ok)throw new Error(d.error||'Ошибка'); var t=d.totals||{},f=d.flow||{},p=d.pending||[];
-    var cards=[['Пользователи',t.users||0],['Пополнено',money(f.deposits||t.deposited||0)+' ₽'],['Баланс игроков',money(t.balances||0)+' ₽'],['Покупки',money(f.shop||0)+' ₽'],['Апгрейды',money(f.upgrades||0)+' ₽'],['Кейсы',money(f.cases||0)+' ₽'],['Продажи игрокам',money(f.sellPayouts||0)+' ₽'],['Инвентарь',money(t.inventoryValue||0)+' ₽']];
-    box.innerHTML=adminTabs('finance')+'<div class="admin-grid">'+cards.map(function(c){return '<div class="finance-card"><span>'+c[0]+'</span><b>'+c[1]+'</b></div>';}).join('')+'</div><div class="panel" style="margin-top:12px"><h3>Заявки на пополнение</h3>'+ (p.length?p.slice(0,30).map(function(x){return '<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #202630;font-size:12px"><span>'+escapeHtml(x.username||'')+' · '+money(x.amount||0)+' ₽</span><span class="muted">'+new Date(x.createdAt||Date.now()).toLocaleString('ru-RU')+'</span></div>';}).join(''):'<div class="muted">Нет ожидающих заявок.</div>')+'</div><div class="muted" style="margin-top:10px">Финансовые показатели — это журнал операций сайта. Реальную чистую прибыль можно считать только после учёта фактических выплат/комиссий.</div>';
+    var cards=[['Пользователи',t.users||0],['Пополнено',money(f.deposits||t.deposited||0)],['Баланс игроков',money(t.balances||0)],['Покупки',money(f.shop||0)],['Апгрейды',money(f.upgrades||0)],['Кейсы',money(f.cases||0)],['Продажи игрокам',money(f.sellPayouts||0)],['Инвентарь',money(t.inventoryValue||0)]];
+    box.innerHTML=adminTabs('finance')+'<div class="admin-grid">'+cards.map(function(c){return '<div class="finance-card"><span>'+c[0]+'</span><b>'+c[1]+'</b></div>';}).join('')+'</div><div class="panel" style="margin-top:12px"><h3>Заявки на пополнение</h3>'+ (p.length?p.slice(0,30).map(function(x){return '<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #202630;font-size:12px"><span>'+escapeHtml(x.username||'')+' · '+money(x.amount||0)+'</span><span class="muted">'+new Date(x.createdAt||Date.now()).toLocaleString('ru-RU')+'</span></div>';}).join(''):'<div class="muted">Нет ожидающих заявок.</div>')+'</div><div class="muted" style="margin-top:10px">Финансовые показатели — это журнал операций сайта. Реальную чистую прибыль можно считать только после учёта фактических выплат/комиссий.</div>';
   }catch(e){box.innerHTML=adminTabs('finance')+'<div class="muted">Не удалось загрузить финансовые данные.</div>';}
 }
 async function renderAdminNews(box){
@@ -4483,7 +4483,7 @@ async function adminStarsTest(username){
     var r=await fetch(apiUrl('/api/admin/stars/test'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({adminToken:adminToken,username:username,amountRub:Math.floor(amount)}),cache:'no-store'});
     var d=await r.json().catch(function(){return{};});
     if(!r.ok||!d.ok)return showInfo('Тест Stars',d.error||'Тест не прошёл.');
-    showInfo('Тест Stars пройден','⭐ '+d.stars+' Stars → +'+money(d.credited||0)+' ₽<br>Баланс: '+money(d.afterBalance||0)+' ₽<br>Заказ: '+escapeHtml(d.orderId||''));
+    showInfo('Тест Stars пройден','⭐ '+d.stars+' Stars → +'+money(d.credited||0)+'<br>Баланс: '+money(d.afterBalance||0)+'<br>Заказ: '+escapeHtml(d.orderId||''));
     renderAdmin();
   }catch(e){showInfo('Тест Stars','Сервер недоступен.');}
 }
@@ -4533,7 +4533,7 @@ function renderAdminGiveSkinList(){
   var count=document.getElementById('adminGiveSkinCount');if(count)count.textContent=list.length+' скинов в каталоге';
   var visible=list.slice(0,_adminGiveSkinState.limit);
   if(!visible.length){box.innerHTML='<div class="muted" style="padding:18px">Ничего не найдено.</div>';return false;}
-  box.innerHTML=visible.map(function(x,i){return '<div class="admin-give-skin-row"><div class="admin-give-skin-art">'+artImg(x[0])+'</div><div class="admin-give-skin-info"><b>'+safeSkinLabel(x[0])+'</b><span>'+money(x[1])+' ₽</span></div><button type="button" class="login-pill admin-give-skin-btn" onclick="return confirmAdminGiveSkin('+i+')">ВЫДАТЬ</button></div>';}).join('');
+  box.innerHTML=visible.map(function(x,i){return '<div class="admin-give-skin-row"><div class="admin-give-skin-art">'+artImg(x[0])+'</div><div class="admin-give-skin-info"><b>'+safeSkinLabel(x[0])+'</b><span>'+money(x[1])+'</span></div><button type="button" class="login-pill admin-give-skin-btn" onclick="return confirmAdminGiveSkin('+i+')">ВЫДАТЬ</button></div>';}).join('');
   if(list.length>_adminGiveSkinState.limit)box.innerHTML+='<button type="button" class="login-pill" style="width:100%;margin-top:10px" onclick="return adminGiveSkinMore()">Показать ещё · '+(list.length-_adminGiveSkinState.limit)+'</button>';
   return false;
 }
@@ -4651,7 +4651,7 @@ async function loadAdminPartners(){
       var status=p.active?'Активен':'Отключён';
       return '<div class="admin-player" style="border-color:'+(p.active?'rgba(255,209,102,.15)':'rgba(239,68,68,.2)')+'">'+
         '<div class="admin-player-name">'+escapeHtml(p.code)+' <span class="muted" style="font-size:10px">· '+status+'</span></div>'+
-        '<div class="admin-player-stats">Владелец: <b style="color:#fff">'+escapeHtml(p.ownerUsername)+'</b><br>Активировали: '+used+' · Клиент +'+Number(p.userBonusPercent||0)+'% · Партнёр '+Number(p.commissionPercent||0)+'%<br>Оборот: '+money(p.totalDeposited||0)+' ₽ · Заработано: '+money(p.totalEarnings||0)+' ₽ · Бонусы клиентам: '+money(p.totalBonus||0)+' ₽</div>'+
+        '<div class="admin-player-stats">Владелец: <b style="color:#fff">'+escapeHtml(p.ownerUsername)+'</b><br>Активировали: '+used+' · Клиент +'+Number(p.userBonusPercent||0)+'% · Партнёр '+Number(p.commissionPercent||0)+'%<br>Оборот: '+money(p.totalDeposited||0)+' · Заработано: '+money(p.totalEarnings||0)+' · Бонусы клиентам: '+money(p.totalBonus||0)+'</div>'+
         '<div class="admin-player-actions"><button style="background:'+(p.active?'#dc2626':'#16a34a')+'" onclick="setPartnerActive(\''+String(p.code).replace(/'/g,"\\'")+'\','+(!p.active)+')">'+(p.active?'Отключить':'Включить')+'</button><button style="background:#6b7280" onclick="deletePartnerCode(\''+String(p.code).replace(/'/g,"\\'")+'\')">Удалить</button></div>'+
       '</div>';
     }).join('');
