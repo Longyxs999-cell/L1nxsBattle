@@ -2003,13 +2003,11 @@ var nxUpgradeAudioCtx=null,nxUpgradeSoundTimer=null,nxUpgradeSoundTick=0,nxUpgra
 var nxUpgradeTickBuffer=null,nxUpgradeTickBufferPromise=null;
 function nxPointerOrbit(){return document.getElementById('up12Pointer')||document.getElementById('up12PointerShape');}
 function nxApplyPointerAngle(angle){
-  // V73: keep the pointer geometry static and animate one transform instead of
-  // rebuilding the SVG path/circle coordinates on every frame. This cuts the
-  // per-frame DOM/SVG work dramatically and is much more stable in iOS Safari,
-  // Android WebView and Telegram's embedded browser.
   var group=document.getElementById('up12Pointer');
   if(!group)return;
   var n=nxNormalizeAngle(angle);
+  // Keep the SVG geometry static; rotate the existing group only. This avoids
+  // rebuilding path/circle attributes on every animation frame on mobile browsers.
   if(group.style&&typeof group.style.setProperty==='function'){
     group.style.setProperty('transform','rotate('+n.toFixed(4)+'deg)','important');
   }else if(typeof group.setAttribute==='function'){

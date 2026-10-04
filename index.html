@@ -2905,13 +2905,11 @@ var nxUpgradeAudioCtx=null,nxUpgradeSoundTimer=null,nxUpgradeSoundTick=0,nxUpgra
 var nxUpgradeTickBuffer=null,nxUpgradeTickBufferPromise=null;
 function nxPointerOrbit(){return document.getElementById('up12Pointer')||document.getElementById('up12PointerShape');}
 function nxApplyPointerAngle(angle){
-  // V73: keep the pointer geometry static and animate one transform instead of
-  // rebuilding the SVG path/circle coordinates on every frame. This cuts the
-  // per-frame DOM/SVG work dramatically and is much more stable in iOS Safari,
-  // Android WebView and Telegram's embedded browser.
   var group=document.getElementById('up12Pointer');
   if(!group)return;
   var n=nxNormalizeAngle(angle);
+  // Keep the SVG geometry static; rotate the existing group only. This avoids
+  // rebuilding path/circle attributes on every animation frame on mobile browsers.
   if(group.style&&typeof group.style.setProperty==='function'){
     group.style.setProperty('transform','rotate('+n.toFixed(4)+'deg)','important');
   }else if(typeof group.setAttribute==='function'){
@@ -5632,19 +5630,6 @@ setInterval(async function() {
 
 .nx-received-card{box-shadow:0 0 0 1px rgba(97,229,138,.55),0 12px 32px rgba(97,229,138,.12)!important;}
 .nx-received-badge{position:absolute;right:7px;top:7px;padding:3px 6px;border-radius:6px;background:rgba(52,211,113,.14);border:1px solid rgba(97,229,138,.45);color:#8ff0aa;font-size:8px;font-weight:1000;z-index:4;}
-</style>
-<style id="nx-v73-pointer-performance">
-/* V73: static SVG pointer geometry + compositor-friendly rotation. */
-#up12Pointer.nx-center-pointer{
-  transform-box:view-box!important;
-  transform-origin:210px 210px!important;
-  transform:rotate(0deg)!important;
-  will-change:transform!important;
-  backface-visibility:hidden!important;
-}
-#up12PointerShape,#up12PointerDot{
-  transform:none!important;
-}
 </style>
 </body>
 </html>
