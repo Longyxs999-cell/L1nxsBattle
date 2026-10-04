@@ -798,13 +798,16 @@ button,input,select{font-size:16px}
 </footer>
 </div>
 <div class="modal" id="authModal"><div class="dialog"><div class="dialog-head"><h3>Вход в NEXUS DROP</h3><button class="close" onclick="closeModal('authModal')">×</button></div>
-<div style="padding:10px 0 4px;color:#c8cdd6;font-size:13px;line-height:1.5">Новый аккаунт создаётся через Telegram. Для старого аккаунта сначала войдите по логину и паролю, затем привяжите Telegram в профиле.</div>
+<div style="padding:10px 0 4px;color:#c8cdd6;font-size:13px;line-height:1.5">Beta: можно войти в существующий аккаунт или создать новый логин/пароль. Реальные пополнения, выводы и Steam-функции в Beta отключены.</div>
 <button class="add-btn" id="telegramLoginBtn" style="width:100%;margin:10px 0 8px;font-weight:900" onclick="startTelegramLogin()">✈️ Войти через Telegram</button>
 <button class="login-pill" id="steamLoginBtn" style="width:100%;margin:0 0 8px;font-weight:900;opacity:.5" disabled title="Steam Login отключён в beta">🎮 Steam Login · beta отключён</button>
 <div style="display:flex;align-items:center;gap:8px;margin:9px 0;color:#59616e;font-size:11px"><span style="height:1px;background:#252a33;flex:1"></span><span>СТАРЫЙ АККАУНТ</span><span style="height:1px;background:#252a33;flex:1"></span></div>
-<input class="input" id="authLogin" placeholder="Старый логин">
+<input class="input" id="authLogin" placeholder="Логин">
 <input class="input" id="authPass" type="password" placeholder="Пароль">
-<button class="login-pill" style="width:100%" onclick="doLogin()">Войти со старым аккаунтом</button>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+<button class="login-pill" style="width:100%" onclick="doLogin()">Войти</button>
+<button class="login-pill" style="width:100%" onclick="doRegisterBeta()">Создать аккаунт</button>
+</div>
 <div id="authMsg" class="muted" style="margin-top:8px"></div></div></div>
 
 <div id="nxMaintenance" class="nx-maintenance" aria-live="polite" aria-modal="true">
@@ -3842,6 +3845,19 @@ async function handleTelegramLogin(data) {
   } catch (e) {
     if (msg) msg.textContent = 'Сервер недоступен.';
   }
+}
+
+async function doRegisterBeta(){
+  var u=(document.getElementById('authLogin')||{}).value?.trim()||'';
+  var p=(document.getElementById('authPass')||{}).value||'';
+  var msg=document.getElementById('authMsg');
+  if(msg)msg.textContent='Создаём аккаунт…';
+  try{
+    var r=await fetch(API+'/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p}),cache:'no-store'});
+    var d=await r.json().catch(function(){return{};});
+    if(!r.ok||!d.ok) throw new Error(d.error||('HTTP '+r.status));
+    authToken=d.token; currentUser=d.user; localStorage.setItem('l1nxs_token',authToken); applyUser(d.user); closeModal('authModal');
+  }catch(e){ if(msg)msg.textContent=e&&e.message?e.message:'Не удалось создать аккаунт'; }
 }
 
 async function doLogin() {
