@@ -2003,15 +2003,18 @@ var nxUpgradeAudioCtx=null,nxUpgradeSoundTimer=null,nxUpgradeSoundTick=0,nxUpgra
 var nxUpgradeTickBuffer=null,nxUpgradeTickBufferPromise=null;
 function nxPointerOrbit(){return document.getElementById('up12Pointer')||document.getElementById('up12PointerShape');}
 function nxApplyPointerAngle(angle){
-  var group=document.getElementById('up12Pointer'),el=document.getElementById('up12PointerShape'),dot=document.getElementById('up12PointerDot');
-  if(!group||!el)return;
-  var n=nxNormalizeAngle(angle),rad=n*Math.PI/180,ux=Math.sin(rad),uy=Math.cos(rad),tx=-uy,ty=ux,cx=210,cy=210,tipR=170,baseR=186,dotR=191,halfW=8.4;
-  function pt(r,t){return{x:cx+ux*r+tx*t,y:cy+uy*r+ty*t};}
-  var tip=pt(tipR,0),left=pt(baseR,-halfW),right=pt(baseR,halfW);
-  el.setAttribute('d','M '+tip.x.toFixed(3)+' '+tip.y.toFixed(3)+' L '+left.x.toFixed(3)+' '+left.y.toFixed(3)+' L '+right.x.toFixed(3)+' '+right.y.toFixed(3)+' Z');
-  el.removeAttribute('transform');el.style.removeProperty('transform');
-  if(dot){var dp=pt(dotR,0);dot.setAttribute('cx',dp.x.toFixed(3));dot.setAttribute('cy',dp.y.toFixed(3));dot.removeAttribute('transform');dot.style.removeProperty('transform');}
-  group.removeAttribute('transform');group.style.removeProperty('transform');
+  // V73: keep the pointer geometry static and animate one transform instead of
+  // rebuilding the SVG path/circle coordinates on every frame. This cuts the
+  // per-frame DOM/SVG work dramatically and is much more stable in iOS Safari,
+  // Android WebView and Telegram's embedded browser.
+  var group=document.getElementById('up12Pointer');
+  if(!group)return;
+  var n=nxNormalizeAngle(angle);
+  if(group.style&&typeof group.style.setProperty==='function'){
+    group.style.setProperty('transform','rotate('+n.toFixed(4)+'deg)','important');
+  }else if(typeof group.setAttribute==='function'){
+    group.setAttribute('transform','rotate('+n.toFixed(4)+' 210 210)');
+  }
 }
 function nxSetUpgradePointerAngle(deg,immediate){var n=Number(deg);if(!Number.isFinite(n))n=0;nxPointerAngle=nxNormalizeAngle(n);nxApplyPointerAngle(nxPointerAngle);if(immediate)nxPointerSpeed=0;}
 function nxStopPointerAnimation(){nxPointerAnimationToken=(Number(nxPointerAnimationToken)||0)+1;if(nxPointerFrame){cancelAnimationFrame(nxPointerFrame);nxPointerFrame=0;}if(nxPointerFinishWatchdog){clearTimeout(nxPointerFinishWatchdog);nxPointerFinishWatchdog=0;}nxPointerSpeed=0;}
